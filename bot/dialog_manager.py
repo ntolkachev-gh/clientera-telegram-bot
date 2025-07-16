@@ -245,34 +245,21 @@ class DialogManager:
             for item in needs_clarification:
                 clarification_text += f"• {item}\n"
             
-            # Предлагаем варианты на основе доступных услуг/мастеров
+            # Предлагаем варианты на основе локальных данных
             if "service" in str(needs_clarification).lower():
-                services_list = await self.youclients_api.format_services_list()
-                clarification_text += f"\n{services_list}"
+                clarification_text += "\nДоступные услуги:\n"
+                clarification_text += "• Стрижка (1500 руб., 60 мин.)\n"
+                clarification_text += "• Окрашивание (3000 руб., 120 мин.)\n"
+                clarification_text += "• Укладка (2000 руб., 90 мин.)\n"
+                clarification_text += "• Мелирование (4000 руб., 150 мин.)\n"
             
             if "master" in str(needs_clarification).lower():
-                masters_list = await self.youclients_api.format_masters_list()
-                clarification_text += f"\n{masters_list}"
+                clarification_text += "\nНаши мастера:\n"
+                clarification_text += "• Анна Петрова (парикмахер)\n"
+                clarification_text += "• Мария Иванова (стилист)\n"
+                clarification_text += "• Елена Сидорова (мастер по окрашиванию)\n"
             
             return clarification_text
-        
-        # Пытаемся найти услугу и мастера
-        service = None
-        master = None
-        
-        if service_name:
-            service = await self.youclients_api.find_service_by_name(service_name)
-        
-        if master_name:
-            master = await self.youclients_api.find_master_by_name(master_name)
-        
-        if not service:
-            return "Не удалось найти указанную услугу. Пожалуйста, выберите из доступных:\n\n" + \
-                   await self.youclients_api.format_services_list()
-        
-        if not master:
-            return "Не удалось найти указанного мастера. Пожалуйста, выберите из доступных:\n\n" + \
-                   await self.youclients_api.format_masters_list()
         
         # Генерируем доступные слоты на основе предпочтений
         available_slots = await self._generate_available_slots(preferred_date, preferred_time)
@@ -281,12 +268,15 @@ class DialogManager:
             return f"К сожалению, нет свободных слотов на указанное время. Попробуйте другой день или время."
         
         # Форматируем доступные слоты
-        slots_text = f"Отлично! Нашел свободные слоты для записи к {master['name']} на {service['title']}:\n\n"
+        service_display = service_name or "выбранную услугу"
+        master_display = master_name or "нашего мастера"
+        
+        slots_text = f"Отлично! Нашел свободные слоты для записи к {master_display} на {service_display}:\n\n"
         for slot in available_slots[:5]:  # Показываем первые 5 слотов
             slots_text += f"• {slot['date']} в {slot['time']}\n"
         
-        slots_text += f"\n💡 Стоимость услуги: {service.get('price', 'уточните')} руб.\n"
-        slots_text += f"⏱ Длительность: {service.get('duration', 'уточните')} мин.\n\n"
+        slots_text += f"\n💡 Стоимость услуги: уточните в салоне\n"
+        slots_text += f"⏱ Длительность: 60-120 мин. (зависит от услуги)\n\n"
         slots_text += "Напишите желаемую дату и время для подтверждения записи."
         
         return slots_text
@@ -354,37 +344,47 @@ class DialogManager:
         if appointment_datetime <= datetime.now():
             return "Пожалуйста, выберите время в будущем."
         
-        # Создаем запись
+        # Создаем запись в локальной базе данных
         try:
-            # Используем заглушку для услуги и мастера
-            service = {"id": 1, "title": "Стрижка", "price": 1500, "duration": 60}
-            master = {"id": 1, "name": "Анна Петрова"}
+            from database.models import Appointment, Client
             
-            # Данные клиента
-            client_data = {
-                "telegram_id": client_profile.get("telegram_id"),
-                "name": client_profile.get("name", "Клиент"),
-                "phone": client_profile.get("phone", ""),
-                "email": client_profile.get("email", "")
-            }
+            # Находим клиента в базе данных
+            client = self.db.query(Client).filter(
+                Client.telegram_id == client_profile.get("telegram_id")
+            ).first()
             
-            # Создаем запись через API (сохранится локально)
-            result = await self.youclients_api.create_appointment(
-                client_data, service["id"], master["id"], appointment_datetime
+            if not client:
+                return "Ошибка: клиент не найден в базе данных."
+            
+            # Определяем услугу и мастера на основе контекста или используем значения по умолчанию
+            service_name = "Стрижка"  # Можно улучшить, анализируя предыдущие сообщения
+            master_name = "Анна Петрова"  # Можно улучшить, анализируя предыдущие сообщения
+            
+            # Создаем запись в локальной БД
+            appointment = Appointment(
+                client_id=client.id,
+                service_name=service_name,
+                master_name=master_name,
+                appointment_datetime=appointment_datetime,
+                duration_minutes=60,  # По умолчанию
+                status="scheduled"
             )
             
-            if result.get("success"):
-                return f"""✅ Запись успешно создана!
+            self.db.add(appointment)
+            self.db.commit()
+            self.db.refresh(appointment)
+            
+            return f"""✅ Запись успешно создана!
 
 📅 Дата: {appointment_datetime.strftime('%d.%m.%Y')}
 ⏰ Время: {appointment_datetime.strftime('%H:%M')}
-🎯 Услуга: {service['title']}
-👩‍💼 Мастер: {master['name']}
-💰 Стоимость: {service['price']} руб.
+🎯 Услуга: {service_name}
+👩‍💼 Мастер: {master_name}
+💰 Стоимость: уточните в салоне
+⏱ Длительность: 60 мин.
 
-Ждем вас в салоне! Если нужно изменить или отменить запись, свяжитесь с нами."""
-            else:
-                return "К сожалению, не удалось создать запись. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
+Запись сохранена в нашей системе. Ждем вас в салоне!
+Если нужно изменить или отменить запись, свяжитесь с нами."""
                 
         except Exception as e:
             return f"Ошибка при создании записи: {str(e)}. Пожалуйста, попробуйте позже."
