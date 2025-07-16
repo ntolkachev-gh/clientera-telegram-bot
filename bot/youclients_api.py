@@ -18,13 +18,41 @@ class YouclientsAPI:
         self.company_id = settings.youclients_company_id
 
     async def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict[str, Any]:
-        """Выполнение HTTP запроса к API Youclients"""
+        """Выполнение HTTP запроса к API Youclients (ВРЕМЕННО ЗАКОММЕНТИРОВАНО)"""
         url = f"{self.base_url}/{endpoint}"
         
-        logger.info(f"Youclients API {method} запрос: {url}")
+        logger.info(f"🔧 Youclients API {method} запрос (ЗАКОММЕНТИРОВАНО): {url}")
         if data:
-            logger.info(f"Данные запроса: {data}")
+            logger.info(f"📋 Данные запроса: {data}")
         
+        # ВРЕМЕННО: Возвращаем заглушку вместо реального запроса
+        logger.warning("⚠️ ВНИМАНИЕ: Реальные запросы к Youclients API временно отключены!")
+        logger.info("📝 Запрос будет залогирован, но не отправлен в Youclients")
+        
+        # Возвращаем заглушку в зависимости от типа запроса
+        if method == "GET" and "services" in endpoint:
+            return {
+                "data": [
+                    {"id": 1, "title": "Стрижка", "price": 1500, "duration": 60},
+                    {"id": 2, "title": "Окрашивание", "price": 3000, "duration": 120},
+                    {"id": 3, "title": "Укладка", "price": 2000, "duration": 90}
+                ]
+            }
+        elif method == "GET" and "staff" in endpoint:
+            return {
+                "data": [
+                    {"id": 1, "name": "Анна", "surname": "Петрова", "specialization": "Парикмахер"},
+                    {"id": 2, "name": "Мария", "surname": "Иванова", "specialization": "Стилист"}
+                ]
+            }
+        elif method == "POST" and "records" in endpoint:
+            logger.info("✅ Запись клиента залогирована (локально)")
+            return {"success": True, "data": {"id": 999, "status": "created"}}
+        else:
+            return {"data": [], "success": True}
+        
+        # ЗАКОММЕНТИРОВАННЫЙ КОД - раскомментировать после настройки API
+        """
         async with httpx.AsyncClient() as client:
             try:
                 if method == "GET":
@@ -52,6 +80,7 @@ class YouclientsAPI:
             except Exception as e:
                 logger.error(f"Неожиданная ошибка при запросе к Youclients: {e}")
                 return {"error": str(e)}
+        """
 
     async def get_services(self) -> List[Dict[str, Any]]:
         """Получение списка услуг"""
@@ -107,7 +136,28 @@ class YouclientsAPI:
     async def create_appointment(self, client_data: Dict[str, Any], 
                                service_id: int, master_id: int, 
                                appointment_datetime: datetime) -> Dict[str, Any]:
-        """Создание записи клиента"""
+        """Создание записи клиента (с сохранением в локальную БД)"""
+        
+        # Получаем информацию об услуге и мастере
+        services = await self.get_services()
+        masters = await self.get_masters()
+        
+        service_name = "Неизвестная услуга"
+        master_name = "Неизвестный мастер"
+        
+        # Находим название услуги
+        for service in services:
+            if service.get("id") == service_id:
+                service_name = service.get("title", "Неизвестная услуга")
+                break
+        
+        # Находим имя мастера
+        for master in masters:
+            if master.get("id") == master_id:
+                master_name = f"{master.get('name', '')} {master.get('surname', '')}".strip()
+                break
+        
+        # Данные для отправки в Youclients (залогированы, но не отправлены)
         data = {
             "company_id": self.company_id,
             "staff_id": master_id,
@@ -126,15 +176,109 @@ class YouclientsAPI:
             "comment": client_data.get("comment", "")
         }
         
+        logger.info(f"📝 Создание записи клиента:")
+        logger.info(f"   👤 Клиент: {client_data.get('name', 'N/A')}")
+        logger.info(f"   📞 Телефон: {client_data.get('phone', 'N/A')}")
+        logger.info(f"   🎯 Услуга: {service_name}")
+        logger.info(f"   👩‍💼 Мастер: {master_name}")
+        logger.info(f"   📅 Дата/время: {appointment_datetime}")
+        logger.info(f"   💬 Комментарий: {client_data.get('comment', 'N/A')}")
+        
+        # Сохраняем в локальную базу данных
+        try:
+            from database.database import get_db
+            from database.models import Appointment, Client
+            from sqlalchemy.orm import Session as DBSession
+            
+            db = next(get_db())
+            
+            # Находим или создаем клиента
+            client = db.query(Client).filter(
+                Client.telegram_id == str(client_data.get("telegram_id"))
+            ).first()
+            
+            if client:
+                # Создаем запись в локальной БД
+                appointment = Appointment(
+                    client_id=client.id,
+                    service_name=service_name,
+                    master_name=master_name,
+                    appointment_datetime=appointment_datetime,
+                    duration_minutes=60,  # По умолчанию
+                    status="scheduled"
+                )
+                
+                db.add(appointment)
+                db.commit()
+                db.refresh(appointment)
+                
+                logger.info(f"✅ Запись сохранена в локальную БД с ID: {appointment.id}")
+                
+            else:
+                logger.warning(f"⚠️ Клиент с telegram_id {client_data.get('telegram_id')} не найден в БД")
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка сохранения в локальную БД: {e}")
+        
+        # ВРЕМЕННО: Возвращаем заглушку вместо реального запроса к Youclients
+        logger.warning("⚠️ Запрос к Youclients API временно отключен!")
+        logger.info("📝 Запись залогирована и сохранена локально")
+        
+        return {"success": True, "data": {"id": "local_999", "status": "created_locally"}}
+        
+        # ЗАКОММЕНТИРОВАННЫЙ КОД - раскомментировать после настройки API
+        """
         response = await self._make_request("POST", f"company/{self.company_id}/records", data)
         
         if "error" in response:
             return {"success": False, "error": response["error"]}
         
         return {"success": True, "data": response.get("data", {})}
+        """
 
     async def get_appointments(self, date_from: str, date_to: str) -> List[Dict[str, Any]]:
-        """Получение списка записей за период"""
+        """Получение списка записей за период (из локальной БД)"""
+        
+        logger.info(f"📅 Получение записей за период: {date_from} - {date_to}")
+        
+        try:
+            from database.database import get_db
+            from database.models import Appointment
+            from datetime import datetime
+            
+            db = next(get_db())
+            
+            # Конвертируем строки в datetime
+            start_date = datetime.strptime(date_from, "%Y-%m-%d")
+            end_date = datetime.strptime(date_to, "%Y-%m-%d")
+            
+            # Получаем записи из локальной БД
+            appointments = db.query(Appointment).filter(
+                Appointment.appointment_datetime >= start_date,
+                Appointment.appointment_datetime <= end_date
+            ).all()
+            
+            # Конвертируем в формат, совместимый с Youclients API
+            result = []
+            for appointment in appointments:
+                result.append({
+                    "id": appointment.id,
+                    "datetime": appointment.appointment_datetime.isoformat(),
+                    "service_name": appointment.service_name,
+                    "master_name": appointment.master_name,
+                    "status": appointment.status,
+                    "created_at": appointment.created_at.isoformat()
+                })
+            
+            logger.info(f"✅ Найдено записей в локальной БД: {len(result)}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка получения записей из локальной БД: {e}")
+            return []
+        
+        # ЗАКОММЕНТИРОВАННЫЙ КОД - раскомментировать после настройки API
+        """
         params = {
             "date_from": date_from,
             "date_to": date_to
@@ -150,9 +294,40 @@ class YouclientsAPI:
             return []
         
         return response.get("data", [])
+        """
 
     async def cancel_appointment(self, appointment_id: int) -> Dict[str, Any]:
-        """Отмена записи"""
+        """Отмена записи (в локальной БД)"""
+        
+        logger.info(f"❌ Отмена записи с ID: {appointment_id}")
+        
+        try:
+            from database.database import get_db
+            from database.models import Appointment
+            
+            db = next(get_db())
+            
+            # Находим запись в локальной БД
+            appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+            
+            if appointment:
+                # Обновляем статус
+                appointment.status = str("cancelled")
+                appointment.updated_at = datetime.utcnow()
+                db.commit()
+                
+                logger.info(f"✅ Запись {appointment_id} отменена в локальной БД")
+                return {"success": True}
+            else:
+                logger.warning(f"⚠️ Запись с ID {appointment_id} не найдена в локальной БД")
+                return {"success": False, "error": "Запись не найдена"}
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка отмены записи в локальной БД: {e}")
+            return {"success": False, "error": str(e)}
+        
+        # ЗАКОММЕНТИРОВАННЫЙ КОД - раскомментировать после настройки API
+        """
         response = await self._make_request(
             "DELETE", 
             f"company/{self.company_id}/records/{appointment_id}"
@@ -162,6 +337,7 @@ class YouclientsAPI:
             return {"success": False, "error": response["error"]}
         
         return {"success": True}
+        """
 
     async def find_service_by_name(self, service_name: str) -> Optional[Dict[str, Any]]:
         """Поиск услуги по названию"""
@@ -230,3 +406,58 @@ class YouclientsAPI:
             formatted += f"  🎯 {specialization}\n\n"
         
         return formatted 
+
+    async def create_service(self, service_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Создание новой услуги"""
+        data = {
+            "title": service_data.get("title", ""),
+            "description": service_data.get("description", ""),
+            "price": service_data.get("price", 0),
+            "duration": service_data.get("duration", 60),
+            "category_id": service_data.get("category_id", None),
+            "is_active": service_data.get("is_active", True)
+        }
+        
+        response = await self._make_request("POST", f"company/{self.company_id}/services", data)
+        
+        if "error" in response:
+            return {"success": False, "error": response["error"]}
+        
+        return {"success": True, "data": response.get("data", {})}
+
+    async def create_master(self, master_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Создание нового мастера"""
+        data = {
+            "name": master_data.get("name", ""),
+            "surname": master_data.get("surname", ""),
+            "phone": master_data.get("phone", ""),
+            "email": master_data.get("email", ""),
+            "specialization": master_data.get("specialization", ""),
+            "is_active": master_data.get("is_active", True),
+            "work_schedule": master_data.get("work_schedule", {})
+        }
+        
+        response = await self._make_request("POST", f"company/{self.company_id}/staff", data)
+        
+        if "error" in response:
+            return {"success": False, "error": response["error"]}
+        
+        return {"success": True, "data": response.get("data", {})}
+
+    async def delete_service(self, service_id: int) -> Dict[str, Any]:
+        """Удаление услуги"""
+        response = await self._make_request("DELETE", f"company/{self.company_id}/services/{service_id}")
+        
+        if "error" in response:
+            return {"success": False, "error": response["error"]}
+        
+        return {"success": True}
+
+    async def delete_master(self, master_id: int) -> Dict[str, Any]:
+        """Удаление мастера"""
+        response = await self._make_request("DELETE", f"company/{self.company_id}/staff/{master_id}")
+        
+        if "error" in response:
+            return {"success": False, "error": response["error"]}
+        
+        return {"success": True} 
