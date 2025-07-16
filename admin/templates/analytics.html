@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Аналитика{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Аналитика</h1>
+    </div>
+
+    <!-- Графики -->
+    <div class="row">
+        <!-- График активности сообщений -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Активность сообщений (последние 30 дней)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <canvas id="messagesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- График новых клиентов -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Новые клиенты (последние 30 дней)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4 pb-2">
+                        <canvas id="clientsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Топ активных клиентов -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Топ активных клиентов</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Клиент</th>
+                            <th>Telegram ID</th>
+                            <th>Сообщений</th>
+                            <th>Дата регистрации</th>
+                            <th>Последняя активность</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client, message_count in top_clients %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                {% if client.first_name %}
+                                    {{ client.first_name }}
+                                    {% if client.last_name %}{{ client.last_name }}{% endif %}
+                                {% else %}
+                                    {{ client.username or 'Неизвестно' }}
+                                {% endif %}
+                            </td>
+                            <td>{{ client.telegram_id }}</td>
+                            <td>
+                                <span class="badge badge-primary">{{ message_count }}</span>
+                            </td>
+                            <td>{{ client.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ client.last_activity.strftime('%Y-%m-%d %H:%M') if client.last_activity else 'Нет данных' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика по дням -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Активность сообщений по дням</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Сообщений</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for day in daily_messages %}
+                                <tr>
+                                    <td>{{ day.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ day.count }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Новые клиенты по дням</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Новых клиентов</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for day in daily_clients %}
+                                <tr>
+                                    <td>{{ day.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ day.count }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// График активности сообщений
+var messagesCtx = document.getElementById("messagesChart");
+var messagesChart = new Chart(messagesCtx, {
+    type: 'line',
+    data: {
+        labels: [
+            {% for day in daily_messages %}
+            "{{ day.date.strftime('%m-%d') }}",
+            {% endfor %}
+        ],
+        datasets: [{
+            label: 'Сообщений',
+            data: [
+                {% for day in daily_messages %}
+                {{ day.count }},
+                {% endfor %}
+            ],
+            borderColor: 'rgb(78, 115, 223)',
+            backgroundColor: 'rgba(78, 115, 223, 0.05)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4
+        }]
+    },
+    options: {
+        maintainAspectRatio: false,
+        layout: {
+            padding: {
+                left: 10,
+                right: 25,
+                top: 25,
+                bottom: 0
+            }
+        },
+        scales: {
+            x: {
+                grid: {
+                    display: false,
+                    drawBorder: false
+                },
+                ticks: {
+                    maxTicksLimit: 7
+                }
+            },
+            y: {
+                ticks: {
+                    maxTicksLimit: 5,
+                    padding: 10,
+                    callback: function(value, index, values) {
+                        return value + ' сообщ.';
+                    }
+                },
+                grid: {
+                    color: "rgb(234, 236, 244)",
+                    zeroLineColor: "rgb(234, 236, 244)",
+                    drawBorder: false,
+                    borderDash: [2],
+                    zeroLineBorderDash: [2]
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// График новых клиентов
+var clientsCtx = document.getElementById("clientsChart");
+var clientsChart = new Chart(clientsCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [
+            {% for day in daily_clients %}
+            "{{ day.date.strftime('%m-%d') }}",
+            {% endfor %}
+        ],
+        datasets: [{
+            data: [
+                {% for day in daily_clients %}
+                {{ day.count }},
+                {% endfor %}
+            ],
+            backgroundColor: [
+                '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b',
+                '#858796', '#5a5c69', '#2e59d9', '#17a673', '#2c9faf'
+            ],
+            hoverBackgroundColor: [
+                '#2e59d9', '#17a673', '#2c9faf', '#f4b619', '#e02424',
+                '#6b6d7d', '#4a4b52', '#224abe', '#13855c', '#1a7a8a'
+            ],
+            hoverBorderColor: "rgba(234, 236, 244, 1)",
+        }]
+    },
+    options: {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'bottom'
+            }
+        },
+        cutout: '80%',
+    }
+});
+</script>
+{% endblock %} 
