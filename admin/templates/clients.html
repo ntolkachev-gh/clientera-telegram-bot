@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Клиенты{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Список клиентов</h1>
+        <div>
+            <span class="badge bg-primary">{{ clients|length }} клиентов</span>
+        </div>
+    </div>
+
+    {% if clients %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Telegram ID</th>
+                    <th>Имя</th>
+                    <th>Фамилия</th>
+                    <th>Телефон</th>
+                    <th>Последний визит</th>
+                    <th>Дата регистрации</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client in clients %}
+                <tr>
+                    <td>{{ client.id }}</td>
+                    <td>
+                        <code>{{ client.telegram_id }}</code>
+                    </td>
+                    <td>{{ client.first_name or 'Не указано' }}</td>
+                    <td>{{ client.last_name or 'Не указано' }}</td>
+                    <td>
+                        {% if client.phone %}
+                            <a href="tel:{{ client.phone }}">{{ client.phone }}</a>
+                        {% else %}
+                            <span class="text-muted">Не указано</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if client.last_visit_date %}
+                            {{ client.last_visit_date.strftime('%d.%m.%Y') }}
+                        {% else %}
+                            <span class="text-muted">Нет данных</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ client.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                    onclick="viewClient({{ client.id }})">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-info" 
+                                    onclick="viewAppointments({{ client.id }})">
+                                <i class="fas fa-calendar"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="fas fa-info-circle"></i>
+        Пока нет зарегистрированных клиентов.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function viewClient(clientId) {
+    // TODO: Реализовать просмотр деталей клиента
+    alert('Просмотр клиента ID: ' + clientId);
+}
+
+function viewAppointments(clientId) {
+    // TODO: Реализовать просмотр записей клиента
+    alert('Записи клиента ID: ' + clientId);
+}
+</script>
+{% endblock %} 

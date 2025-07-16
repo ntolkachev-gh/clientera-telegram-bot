@@ -103,7 +103,7 @@ async def clients_list(request: Request, db: Session = Depends(get_db),
     
     return templates.TemplateResponse("clients.html", {
         "request": request,
-        "clients": clients_with_stats
+        "clients": clients
     })
 
 
