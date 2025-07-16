@@ -8,6 +8,7 @@ from sqlalchemy import func, desc
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import secrets
+import markupsafe
 
 from database.database import get_db
 from database.models import Client, Message, OpenAIUsageLog, Appointment, Session as ChatSession
@@ -18,6 +19,15 @@ app = FastAPI(title="Clientera Admin", description="Админка для упр
 
 # Настройка шаблонов
 templates = Jinja2Templates(directory="admin/templates")
+
+# Добавляем фильтр nl2br
+def nl2br(value):
+    """Преобразует переносы строк в HTML теги <br>"""
+    if value is None:
+        return ""
+    return markupsafe.Markup(str(value).replace('\n', '<br>'))
+
+templates.env.filters['nl2br'] = nl2br
 
 # Простая HTTP Basic аутентификация
 security = HTTPBasic()
