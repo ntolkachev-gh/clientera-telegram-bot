@@ -155,6 +155,13 @@ class OpenAIClient:
         - Любимые мастера: {client_profile.get('favorite_masters', [])}
         - Предпочитаемое время: {client_profile.get('preferred_time_slots', [])}
         
+        ВАЖНО: Если клиент хочет записаться на услугу (даже если не указал конкретную услугу или время), 
+        то intent должен быть "booking". Ключевые слова для записи:
+        - "записаться", "запись", "записаться к вам", "хочу записаться"
+        - "записаться на стрижку", "записаться к мастеру"
+        - "когда можно записаться", "есть ли свободное время"
+        - "хочу прийти", "когда можно прийти"
+        
         Проанализируй запрос и верни JSON:
         {{
             "intent": "booking|question|other",
@@ -166,6 +173,12 @@ class OpenAIClient:
             "needs_clarification": ["список того, что нужно уточнить"],
             "response": "ответ клиенту"
         }}
+        
+        Если intent = "booking", то в needs_clarification укажи что нужно уточнить:
+        - Если не указана услуга: "service"
+        - Если не указан мастер: "master" 
+        - Если не указана дата: "date"
+        - Если не указано время: "time"
         """
         
         try:
@@ -181,14 +194,19 @@ class OpenAIClient:
             self._log_usage(
                 client_id=client_profile.get('id'),
                 model="gpt-4",
-                purpose="chat",
+                purpose="booking_analysis",
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
                 total_tokens=usage.total_tokens
             )
             
             import json
-            return json.loads(response.choices[0].message.content)
+            result = json.loads(response.choices[0].message.content)
+            
+            # Добавляем логирование для отладки
+            print(f"🔍 Анализ запроса: '{user_message}' -> intent: {result.get('intent')}")
+            
+            return result
             
         except Exception as e:
             print(f"Ошибка при обработке запроса на запись: {e}")

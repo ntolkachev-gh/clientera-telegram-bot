@@ -190,6 +190,18 @@ class DialogManager:
         if self._is_booking_confirmation(message_text):
             return await self._handle_booking_confirmation(client_profile, message_text)
         
+        # Проверяем, является ли это запросом на запись (дополнительная проверка)
+        if self._is_booking_request(message_text):
+            # Принудительно обрабатываем как запрос на запись
+            return await self._handle_booking_request({
+                "intent": "booking",
+                "service": None,
+                "master": None,
+                "preferred_date": None,
+                "preferred_time": None,
+                "needs_clarification": ["service", "master", "date", "time"]
+            }, client_profile)
+        
         # Анализируем запрос с помощью GPT
         analysis = await self.openai_client.process_booking_request(message_text, client_profile)
         
@@ -201,6 +213,38 @@ class DialogManager:
             return await self._handle_question(message_text)
         else:
             return await self._handle_general_chat(message_text, client_profile)
+
+    def _is_booking_request(self, message_text: str) -> bool:
+        """Проверяет, является ли сообщение запросом на запись"""
+        import re
+        
+        # Ключевые слова для записи
+        booking_keywords = [
+            'записаться', 'запись', 'хочу записаться', 'записаться к вам',
+            'записаться на', 'записаться к мастеру', 'когда можно записаться',
+            'есть ли свободное время', 'хочу прийти', 'когда можно прийти',
+            'записаться в салон', 'записаться в салон красоты'
+        ]
+        
+        message_lower = message_text.lower()
+        
+        # Проверяем наличие ключевых слов
+        for keyword in booking_keywords:
+            if keyword in message_lower:
+                return True
+        
+        # Проверяем паттерны типа "хочу + услуга"
+        service_patterns = [
+            r'хочу\s+(стрижку|окрашивание|укладку|мелирование)',
+            r'нужна\s+(стрижка|окрашивание|укладка|мелирование)',
+            r'записаться\s+на\s+(стрижку|окрашивание|укладку|мелирование)'
+        ]
+        
+        for pattern in service_patterns:
+            if re.search(pattern, message_lower):
+                return True
+        
+        return False
 
     def _is_booking_confirmation(self, message_text: str) -> bool:
         """Проверяет, является ли сообщение подтверждением записи"""
