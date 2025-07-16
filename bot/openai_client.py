@@ -145,8 +145,12 @@ class OpenAIClient:
             return []
 
     async def process_booking_request(self, user_message: str, 
-                                    client_profile: Dict[str, Any]) -> Dict[str, Any]:
+                                    client_profile: Dict[str, Any],
+                                    available_services: List[str] | None = None) -> Dict[str, Any]:
         """Обработка запроса на запись с учетом профиля клиента"""
+        # Добавляем список услуг, известный боту (если передан)
+        services_list_text = ", ".join(available_services) if available_services else "неизвестно"
+
         prompt = f"""
         Клиент салона красоты написал: "{user_message}"
         
@@ -154,6 +158,8 @@ class OpenAIClient:
         - Любимые услуги: {client_profile.get('favorite_services', [])}
         - Любимые мастера: {client_profile.get('favorite_masters', [])}
         - Предпочитаемое время: {client_profile.get('preferred_time_slots', [])}
+
+        Доступные услуги салона: {services_list_text}
         
         ВАЖНО: Если клиент хочет записаться на услугу (даже если не указал конкретную услугу или время), 
         то intent должен быть "booking". Ключевые слова для записи:

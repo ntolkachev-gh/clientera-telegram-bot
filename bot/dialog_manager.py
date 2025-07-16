@@ -186,24 +186,23 @@ class DialogManager:
             "custom_notes": client.custom_notes or {}
         }
         
-        # Проверяем, является ли это подтверждением записи (содержит дату и время)
+        # Сначала проверяем, является ли это подтверждением записи (содержит дату и время)
         if self._is_booking_confirmation(message_text):
             return await self._handle_booking_confirmation(client_profile, message_text)
-        
-        # Проверяем, является ли это запросом на запись (дополнительная проверка)
-        if self._is_booking_request(message_text):
-            # Принудительно обрабатываем как запрос на запись
-            return await self._handle_booking_request({
-                "intent": "booking",
-                "service": None,
-                "master": None,
-                "preferred_date": None,
-                "preferred_time": None,
-                "needs_clarification": ["service", "master", "date", "time"]
-            }, client_profile)
-        
-        # Анализируем запрос с помощью GPT
-        analysis = await self.openai_client.process_booking_request(message_text, client_profile)
+
+        # Получаем список услуг, чтобы передать его в GPT
+        try:
+            services_raw = await self.youclients_api.get_services()
+            available_services = [s.get("title") for s in services_raw if s.get("title")]
+        except Exception:
+            available_services = []
+
+        # Анализируем запрос с помощью GPT (без ручных ключевых слов)
+        analysis = await self.openai_client.process_booking_request(
+            message_text,
+            client_profile,
+            available_services
+        )
         
         intent = analysis.get("intent", "other")
         
@@ -223,7 +222,8 @@ class DialogManager:
             'записаться', 'запись', 'хочу записаться', 'записаться к вам',
             'записаться на', 'записаться к мастеру', 'когда можно записаться',
             'есть ли свободное время', 'хочу прийти', 'когда можно прийти',
-            'записаться в салон', 'записаться в салон красоты'
+            'записаться в салон', 'записаться в салон красоты',
+            'массаж', 'маникюр', 'педикюр', 'spa', 'спа', 'обертывание'
         ]
         
         message_lower = message_text.lower()
@@ -235,9 +235,9 @@ class DialogManager:
         
         # Проверяем паттерны типа "хочу + услуга"
         service_patterns = [
-            r'хочу\s+(стрижку|окрашивание|укладку|мелирование)',
-            r'нужна\s+(стрижка|окрашивание|укладка|мелирование)',
-            r'записаться\s+на\s+(стрижку|окрашивание|укладку|мелирование)'
+            r'хочу\s+(стрижку|окрашивание|укладку|мелирование|массаж|маникюр|педикюр|spa|спа|обертывание)',
+            r'нужна\s+(стрижка|окрашивание|укладка|мелирование|массаж|маникюр|педикюр|spa|спа|обертывание)',
+            r'записаться\s+на\s+(стрижку|окрашивание|укладку|мелирование|массаж|маникюр|педикюр|spa|спа|обертывание)'
         ]
         
         for pattern in service_patterns:
