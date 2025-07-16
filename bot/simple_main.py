@@ -120,19 +120,32 @@ class SimpleTelegramBot:
                 # Получаем ответ от GPT-4
                 openai_client = OpenAIClient(db)
                 
+                # Получаем историю сообщений для контекста
+                recent_messages = db.query(Message).filter(
+                    Message.client_id == client.id
+                ).order_by(Message.created_at.desc()).limit(10).all()
+                
+                # Создаем список сообщений с историей
                 messages = [
                     {
                         "role": "system",
                         "content": f"""Ты - дружелюбный помощник в салоне красоты. 
                         Общайся с клиентом {client.first_name or 'дорогой клиент'} тепло и профессионально.
                         Отвечай на вопросы о салоне, услугах, записи.
-                        Если не знаешь точной информации, честно скажи об этом."""
-                    },
-                    {
-                        "role": "user",
-                        "content": message_text
+                        Если не знаешь точной информации, честно скажи об этом.
+                        Важно: помни контекст разговора и не спрашивай информацию, которую клиент уже предоставил."""
                     }
                 ]
+                
+                # Добавляем историю сообщений (в обратном порядке)
+                for msg in reversed(recent_messages):
+                    if msg.message_type == "user":
+                        messages.append({"role": "user", "content": msg.content})
+                    elif msg.message_type == "bot":
+                        messages.append({"role": "assistant", "content": msg.content})
+                
+                # Добавляем текущее сообщение пользователя
+                messages.append({"role": "user", "content": message_text})
                 
                 response = await openai_client.chat_completion(messages, client.id)
                 
