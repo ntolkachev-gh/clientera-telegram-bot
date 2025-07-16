@@ -1,7 +1,10 @@
 import httpx
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class YouclientsAPI:
@@ -18,6 +21,10 @@ class YouclientsAPI:
         """Выполнение HTTP запроса к API Youclients"""
         url = f"{self.base_url}/{endpoint}"
         
+        logger.info(f"Youclients API {method} запрос: {url}")
+        if data:
+            logger.info(f"Данные запроса: {data}")
+        
         async with httpx.AsyncClient() as client:
             try:
                 if method == "GET":
@@ -29,14 +36,21 @@ class YouclientsAPI:
                 elif method == "DELETE":
                     response = await client.delete(url, headers=self.headers)
                 
+                logger.info(f"Youclients API ответ: {response.status_code}")
+                logger.info(f"Заголовки ответа: {response.headers}")
+                
                 response.raise_for_status()
-                return response.json()
+                response_data = response.json()
+                logger.info(f"Данные ответа: {response_data}")
+                return response_data
                 
             except httpx.HTTPError as e:
-                print(f"Ошибка HTTP запроса к Youclients: {e}")
+                logger.error(f"Ошибка HTTP запроса к Youclients: {e}")
+                logger.error(f"Статус код: {e.response.status_code if hasattr(e, 'response') else 'N/A'}")
+                logger.error(f"Текст ответа: {e.response.text if hasattr(e, 'response') else 'N/A'}")
                 return {"error": str(e)}
             except Exception as e:
-                print(f"Неожиданная ошибка при запросе к Youclients: {e}")
+                logger.error(f"Неожиданная ошибка при запросе к Youclients: {e}")
                 return {"error": str(e)}
 
     async def get_services(self) -> List[Dict[str, Any]]:

@@ -84,6 +84,8 @@ class SimpleTelegramBot:
     async def process_appointment_booking(self, message_text: str, client: Client) -> Optional[str]:
         """Обработка записи на услуги и создание записи в Youclients"""
         try:
+            logger.info(f"Проверяем сообщение на запись: {message_text}")
+            
             # Простой парсинг для определения намерения записи
             booking_keywords = ['записать', 'записаться', 'запись', 'хочу записаться', 'запиши']
             service_keywords = ['массаж', 'обертывание', 'спа', 'процедура', 'маникюр', 'педикюр']
@@ -91,7 +93,11 @@ class SimpleTelegramBot:
             is_booking = any(keyword in message_text.lower() for keyword in booking_keywords)
             has_service = any(keyword in message_text.lower() for keyword in service_keywords)
             
+            logger.info(f"is_booking: {is_booking}, has_service: {has_service}")
+            
             if is_booking and has_service:
+                logger.info("Обнаружена попытка записи, создаем запись в Youclients")
+                
                 # Создаем запись в Youclients
                 youclients_api = YouclientsAPI()
                 
@@ -104,19 +110,29 @@ class SimpleTelegramBot:
                 elif 'спа' in message_text.lower():
                     service_name = 'спа-процедура'
                 
+                logger.info(f"Определена услуга: {service_name}")
+                
                 if service_name:
                     # Ищем услугу в Youclients
+                    logger.info("Ищем услугу в Youclients API")
                     service = await youclients_api.find_service_by_name(service_name)
+                    logger.info(f"Найдена услуга: {service}")
+                    
                     if service:
                         # Получаем список мастеров
+                        logger.info("Получаем список мастеров")
                         masters = await youclients_api.get_masters()
+                        logger.info(f"Найдено мастеров: {len(masters) if masters else 0}")
+                        
                         if masters:
                             # Берем первого доступного мастера
                             master = masters[0]
+                            logger.info(f"Выбран мастер: {master}")
                             
                             # Назначаем время на завтра в 10:00
                             tomorrow = datetime.now() + timedelta(days=1)
                             appointment_time = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0)
+                            logger.info(f"Время записи: {appointment_time}")
                             
                             # Создаем запись
                             client_data = {
@@ -126,6 +142,7 @@ class SimpleTelegramBot:
                                 "comment": f"Запись через Telegram бота. Сообщение: {message_text}"
                             }
                             
+                            logger.info(f"Создаем запись с данными: {client_data}")
                             result = await youclients_api.create_appointment(
                                 client_data, 
                                 service["id"], 
@@ -133,13 +150,20 @@ class SimpleTelegramBot:
                                 appointment_time
                             )
                             
+                            logger.info(f"Результат создания записи: {result}")
+                            
                             if result.get("success"):
                                 return f"✅ Отлично! Я создал запись на {service_name} на завтра в 10:00. Запись подтверждена в системе."
                             else:
                                 return f"❌ К сожалению, не удалось создать запись. Ошибка: {result.get('error', 'Неизвестная ошибка')}"
+                        else:
+                            logger.warning("Не найдено мастеров в Youclients")
+                    else:
+                        logger.warning(f"Услуга '{service_name}' не найдена в Youclients")
                 
                 return "Я понял, что вы хотите записаться. Пожалуйста, уточните, на какую именно услугу вы хотели бы записаться?"
             
+            logger.info("Сообщение не является записью на услугу")
             return None
             
         except Exception as e:
