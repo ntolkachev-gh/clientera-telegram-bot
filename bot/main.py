@@ -176,6 +176,28 @@ class TelegramBot:
             )
         elif query.data == "start":
             await self.start_command(update, context)
+        # Обработка демо-кнопок
+        elif query.data == "demo_booking":
+            await query.edit_message_text(
+                "📅 Отлично! Для записи напишите что вас интересует:\n\n"
+                "• 'Хочу записаться на маникюр'\n"
+                "• 'Запиши меня к Наталье на завтра'\n"
+                "• 'Нужен педикюр на пятницу вечером'\n\n"
+                "Или просто скажите, какая услуга вас интересует! 😊"
+            )
+        elif query.data == "demo_services":
+            await self.services_command(update, context)
+        elif query.data == "demo_masters":
+            await self.masters_command(update, context)
+        elif query.data == "demo_help":
+            await query.edit_message_text(
+                "❓ Я помогу вам с любыми вопросами!\n\n"
+                "• Записаться на услуги\n"
+                "• Узнать цены\n"
+                "• Выбрать мастера\n"
+                "• Найти удобное время\n\n"
+                "Просто напишите ваш вопрос! 😊"
+            )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка текстовых сообщений"""
