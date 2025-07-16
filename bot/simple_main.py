@@ -1,12 +1,16 @@
 import asyncio
 import logging
 import nest_asyncio
+import re
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from database.database import SessionLocal, init_db
 from database.models import Client, Session as ChatSession, Message
 from bot.openai_client import OpenAIClient
+from bot.youclients_api import YouclientsAPI
 from config import settings
+from typing import Optional
 
 # Применяем nest_asyncio для решения проблем с event loop
 nest_asyncio.apply()
@@ -76,6 +80,71 @@ class SimpleTelegramBot:
                 db.refresh(client)
             
             return client
+
+    async def process_appointment_booking(self, message_text: str, client: Client) -> Optional[str]:
+        """Обработка записи на услуги и создание записи в Youclients"""
+        try:
+            # Простой парсинг для определения намерения записи
+            booking_keywords = ['записать', 'записаться', 'запись', 'хочу записаться', 'запиши']
+            service_keywords = ['массаж', 'обертывание', 'спа', 'процедура', 'маникюр', 'педикюр']
+            
+            is_booking = any(keyword in message_text.lower() for keyword in booking_keywords)
+            has_service = any(keyword in message_text.lower() for keyword in service_keywords)
+            
+            if is_booking and has_service:
+                # Создаем запись в Youclients
+                youclients_api = YouclientsAPI()
+                
+                # Определяем услугу по тексту
+                service_name = None
+                if 'массаж' in message_text.lower():
+                    service_name = 'массаж'
+                elif 'обертывание' in message_text.lower():
+                    service_name = 'обертывание'
+                elif 'спа' in message_text.lower():
+                    service_name = 'спа-процедура'
+                
+                if service_name:
+                    # Ищем услугу в Youclients
+                    service = await youclients_api.find_service_by_name(service_name)
+                    if service:
+                        # Получаем список мастеров
+                        masters = await youclients_api.get_masters()
+                        if masters:
+                            # Берем первого доступного мастера
+                            master = masters[0]
+                            
+                            # Назначаем время на завтра в 10:00
+                            tomorrow = datetime.now() + timedelta(days=1)
+                            appointment_time = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0)
+                            
+                            # Создаем запись
+                            client_data = {
+                                "name": f"{client.first_name or ''} {client.last_name or ''}".strip(),
+                                "phone": "",  # Нужно будет добавить сбор телефона
+                                "email": "",
+                                "comment": f"Запись через Telegram бота. Сообщение: {message_text}"
+                            }
+                            
+                            result = await youclients_api.create_appointment(
+                                client_data, 
+                                service["id"], 
+                                master["id"], 
+                                appointment_time
+                            )
+                            
+                            if result.get("success"):
+                                return f"✅ Отлично! Я создал запись на {service_name} на завтра в 10:00. Запись подтверждена в системе."
+                            else:
+                                return f"❌ К сожалению, не удалось создать запись. Ошибка: {result.get('error', 'Неизвестная ошибка')}"
+                
+                return "Я понял, что вы хотите записаться. Пожалуйста, уточните, на какую именно услугу вы хотели бы записаться?"
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обработке записи: {e}")
+            return None
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка текстовых сообщений"""
@@ -147,7 +216,15 @@ class SimpleTelegramBot:
                 # Добавляем текущее сообщение пользователя
                 messages.append({"role": "user", "content": message_text})
                 
-                response = await openai_client.chat_completion(messages, client.id)
+                # Проверяем, не является ли это записью на услугу
+                appointment_response = await self.process_appointment_booking(message_text, client)
+                
+                if appointment_response:
+                    # Если это запись, отправляем ответ сразу
+                    response = appointment_response
+                else:
+                    # Иначе получаем ответ от GPT-4
+                    response = await openai_client.chat_completion(messages, client.id)
                 
                 # Сохраняем ответ бота
                 bot_message = Message(
