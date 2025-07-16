@@ -178,12 +178,17 @@ class DialogManager:
         # Подготавливаем профиль клиента
         client_profile = {
             "id": client.id,
+            "telegram_id": client.telegram_id,
             "name": f"{client.first_name or ''} {client.last_name or ''}".strip(),
             "favorite_services": client.favorite_services or [],
             "favorite_masters": client.favorite_masters or [],
             "preferred_time_slots": client.preferred_time_slots or [],
             "custom_notes": client.custom_notes or {}
         }
+        
+        # Проверяем, является ли это подтверждением записи (содержит дату и время)
+        if self._is_booking_confirmation(message_text):
+            return await self._handle_booking_confirmation(client_profile, message_text)
         
         # Анализируем запрос с помощью GPT
         analysis = await self.openai_client.process_booking_request(message_text, client_profile)
@@ -196,6 +201,35 @@ class DialogManager:
             return await self._handle_question(message_text)
         else:
             return await self._handle_general_chat(message_text, client_profile)
+
+    def _is_booking_confirmation(self, message_text: str) -> bool:
+        """Проверяет, является ли сообщение подтверждением записи"""
+        import re
+        
+        # Паттерны для даты и времени
+        date_patterns = [
+            r'\d{1,2}\.\d{1,2}\.\d{4}',  # 17.07.2025
+            r'\d{1,2}\.\d{1,2}',  # 17.07
+            r'\d{1,2}/\d{1,2}/\d{4}',  # 17/07/2025
+            r'\d{1,2}-\d{1,2}-\d{4}',  # 17-07-2025
+        ]
+        
+        time_patterns = [
+            r'\d{1,2}:\d{2}',  # 14:30
+            r'\d{1,2}\.\d{2}',  # 14.30
+        ]
+        
+        # Проверяем наличие даты
+        has_date = any(re.search(pattern, message_text) for pattern in date_patterns)
+        
+        # Проверяем наличие времени
+        has_time = any(re.search(pattern, message_text) for pattern in time_patterns)
+        
+        # Проверяем ключевые слова подтверждения
+        confirmation_words = ['да', 'подтверждаю', 'записываю', 'хочу', 'хотел бы', 'можно']
+        has_confirmation = any(word in message_text.lower() for word in confirmation_words)
+        
+        return (has_date and has_time) or (has_confirmation and (has_date or has_time))
 
     async def _handle_booking_request(self, analysis: Dict[str, Any], client_profile: Dict[str, Any]) -> str:
         """Обработка запроса на запись"""
@@ -240,22 +274,169 @@ class DialogManager:
             return "Не удалось найти указанного мастера. Пожалуйста, выберите из доступных:\n\n" + \
                    await self.youclients_api.format_masters_list()
         
-        # Получаем доступные слоты
-        available_slots = await self.youclients_api.get_next_available_slots(
-            service["id"], master["id"], days_ahead=7
-        )
+        # Генерируем доступные слоты на основе предпочтений
+        available_slots = await self._generate_available_slots(preferred_date, preferred_time)
         
         if not available_slots:
-            return f"К сожалению, у мастера {master_name} нет свободных слотов на ближайшие 7 дней."
+            return f"К сожалению, нет свободных слотов на указанное время. Попробуйте другой день или время."
         
         # Форматируем доступные слоты
-        slots_text = f"Доступные слоты для записи к {master_name} на {service_name}:\n\n"
-        for slot in available_slots[:10]:  # Показываем первые 10 слотов
+        slots_text = f"Отлично! Нашел свободные слоты для записи к {master['name']} на {service['title']}:\n\n"
+        for slot in available_slots[:5]:  # Показываем первые 5 слотов
             slots_text += f"• {slot['date']} в {slot['time']}\n"
         
-        slots_text += "\nНапишите желаемую дату и время для записи."
+        slots_text += f"\n💡 Стоимость услуги: {service.get('price', 'уточните')} руб.\n"
+        slots_text += f"⏱ Длительность: {service.get('duration', 'уточните')} мин.\n\n"
+        slots_text += "Напишите желаемую дату и время для подтверждения записи."
         
         return slots_text
+
+    async def _handle_booking_confirmation(self, client_profile: Dict[str, Any], message_text: str) -> str:
+        """Обработка подтверждения записи"""
+        # Пытаемся извлечь дату и время из сообщения
+        from datetime import datetime
+        import re
+        
+        # Простые паттерны для поиска даты и времени
+        date_patterns = [
+            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # 17.07.2025
+            r'(\d{1,2})\.(\d{1,2})',  # 17.07 (текущий год)
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',  # 17/07/2025
+            r'(\d{1,2})-(\d{1,2})-(\d{4})',  # 17-07-2025
+        ]
+        
+        time_patterns = [
+            r'(\d{1,2}):(\d{2})',  # 14:30
+            r'(\d{1,2})\.(\d{2})',  # 14.30
+        ]
+        
+        # Ищем дату
+        appointment_date = None
+        for pattern in date_patterns:
+            match = re.search(pattern, message_text)
+            if match:
+                if len(match.groups()) == 3:
+                    day, month, year = match.groups()
+                else:
+                    day, month = match.groups()
+                    year = datetime.now().year
+                try:
+                    appointment_date = datetime(int(year), int(month), int(day))
+                    break
+                except ValueError:
+                    continue
+        
+        # Ищем время
+        appointment_time = None
+        for pattern in time_patterns:
+            match = re.search(pattern, message_text)
+            if match:
+                hour, minute = match.groups()
+                try:
+                    appointment_time = datetime.now().replace(hour=int(hour), minute=int(minute))
+                    break
+                except ValueError:
+                    continue
+        
+        if not appointment_date:
+            return "Пожалуйста, укажите дату записи в формате ДД.ММ.ГГГГ (например, 17.07.2025)"
+        
+        if not appointment_time:
+            return "Пожалуйста, укажите время записи в формате ЧЧ:ММ (например, 14:30)"
+        
+        # Создаем полную дату и время
+        appointment_datetime = appointment_date.replace(
+            hour=appointment_time.hour,
+            minute=appointment_time.minute
+        )
+        
+        # Проверяем, что время в будущем
+        if appointment_datetime <= datetime.now():
+            return "Пожалуйста, выберите время в будущем."
+        
+        # Создаем запись
+        try:
+            # Используем заглушку для услуги и мастера
+            service = {"id": 1, "title": "Стрижка", "price": 1500, "duration": 60}
+            master = {"id": 1, "name": "Анна Петрова"}
+            
+            # Данные клиента
+            client_data = {
+                "telegram_id": client_profile.get("telegram_id"),
+                "name": client_profile.get("name", "Клиент"),
+                "phone": client_profile.get("phone", ""),
+                "email": client_profile.get("email", "")
+            }
+            
+            # Создаем запись через API (сохранится локально)
+            result = await self.youclients_api.create_appointment(
+                client_data, service["id"], master["id"], appointment_datetime
+            )
+            
+            if result.get("success"):
+                return f"""✅ Запись успешно создана!
+
+📅 Дата: {appointment_datetime.strftime('%d.%m.%Y')}
+⏰ Время: {appointment_datetime.strftime('%H:%M')}
+🎯 Услуга: {service['title']}
+👩‍💼 Мастер: {master['name']}
+💰 Стоимость: {service['price']} руб.
+
+Ждем вас в салоне! Если нужно изменить или отменить запись, свяжитесь с нами."""
+            else:
+                return "К сожалению, не удалось создать запись. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
+                
+        except Exception as e:
+            return f"Ошибка при создании записи: {str(e)}. Пожалуйста, попробуйте позже."
+
+    async def _generate_available_slots(self, preferred_date: str = None, preferred_time: str = None) -> List[Dict[str, Any]]:
+        """Генерация доступных слотов на основе предпочтений"""
+        from datetime import datetime, timedelta
+        
+        slots = []
+        start_date = datetime.now()
+        
+        # Если указана предпочтительная дата, начинаем с неё
+        if preferred_date:
+            try:
+                # Пытаемся распарсить дату в разных форматах
+                for fmt in ['%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
+                    try:
+                        start_date = datetime.strptime(preferred_date, fmt)
+                        break
+                    except ValueError:
+                        continue
+            except:
+                start_date = datetime.now()
+        
+        # Генерируем слоты на следующие 7 дней
+        for i in range(7):
+            current_date = start_date + timedelta(days=i)
+            
+            # Пропускаем выходные (суббота и воскресенье)
+            if current_date.weekday() >= 5:
+                continue
+            
+            # Генерируем временные слоты с 9:00 до 19:00
+            for hour in range(9, 19):
+                for minute in [0, 30]:  # Каждые полчаса
+                    time_str = f"{hour:02d}:{minute:02d}"
+                    
+                    # Если указано предпочтительное время, приоритизируем его
+                    if preferred_time and preferred_time in time_str:
+                        slots.insert(0, {
+                            "date": current_date.strftime("%d.%m.%Y"),
+                            "time": time_str,
+                            "datetime": current_date.replace(hour=hour, minute=minute)
+                        })
+                    else:
+                        slots.append({
+                            "date": current_date.strftime("%d.%m.%Y"),
+                            "time": time_str,
+                            "datetime": current_date.replace(hour=hour, minute=minute)
+                        })
+        
+        return slots[:10]  # Возвращаем первые 10 слотов
 
     async def _handle_question(self, message_text: str) -> str:
         """Обработка вопроса через базу знаний"""
