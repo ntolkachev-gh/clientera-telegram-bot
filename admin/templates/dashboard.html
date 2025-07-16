@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд - Clientera Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Статистические карточки -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Всего клиентов
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_clients }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Активных за месяц
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ active_clients }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            Сообщений сегодня
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ messages_today }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-comments fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Стоимость AI сегодня
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">${{ cost_today }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Общая статистика</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-borderless">
+                        <tbody>
+                            <tr>
+                                <td><i class="fas fa-comments text-primary"></i> Всего сообщений</td>
+                                <td class="text-right font-weight-bold">{{ total_messages }}</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-robot text-success"></i> Общая стоимость AI</td>
+                                <td class="text-right font-weight-bold">${{ total_cost }}</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-play-circle text-info"></i> Активных сессий</td>
+                                <td class="text-right font-weight-bold">{{ active_sessions }}</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fas fa-calendar-check text-warning"></i> Записей на сегодня</td>
+                                <td class="text-right font-weight-bold">{{ appointments_today }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Быстрые действия</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/clients" class="btn btn-primary">
+                        <i class="fas fa-users"></i> Просмотреть клиентов
+                    </a>
+                    <a href="/appointments" class="btn btn-success">
+                        <i class="fas fa-calendar-alt"></i> Управление записями
+                    </a>
+                    <a href="/usage" class="btn btn-info">
+                        <i class="fas fa-chart-line"></i> Статистика AI
+                    </a>
+                    <a href="/analytics" class="btn btn-warning">
+                        <i class="fas fa-analytics"></i> Аналитика
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+.text-gray-300 {
+    color: #dddfeb !important;
+}
+.text-gray-800 {
+    color: #5a5c69 !important;
+}
+</style>
+{% endblock %} 
