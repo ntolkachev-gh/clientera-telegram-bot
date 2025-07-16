@@ -12,6 +12,7 @@ import secrets
 from database.database import get_db
 from database.models import Client, Message, OpenAIUsageLog, Appointment, Session as ChatSession
 from config import settings
+from bot.embedding import KnowledgeBaseManager
 
 app = FastAPI(title="Clientera Admin", description="Админка для управления клиентами салона красоты")
 
@@ -265,6 +266,25 @@ async def analytics(request: Request, db: Session = Depends(get_db),
         "daily_messages": daily_messages,
         "daily_clients": daily_clients,
         "top_clients": top_clients
+    })
+
+
+@app.get("/kb-search", response_class=HTMLResponse)
+async def kb_search_page(request: Request, query: str = None, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+    """Поиск по базе знаний (Qdrant)"""
+    results = []
+    error = None
+    if query:
+        try:
+            kb_manager = KnowledgeBaseManager()
+            results = await kb_manager.search_knowledge_base(query, limit=5)
+        except Exception as e:
+            error = str(e)
+    return templates.TemplateResponse("knowledge_base_search.html", {
+        "request": request,
+        "query": query,
+        "results": results,
+        "error": error
     })
 
 
