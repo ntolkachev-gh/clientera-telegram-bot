@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика использования OpenAI{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Статистика использования OpenAI</h1>
+    </div>
+
+    <!-- Общая статистика -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Всего запросов
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_usage }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Общая стоимость
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">${{ total_cost }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Всего токенов
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ "{:,}".format(total_tokens) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Средняя стоимость
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                ${{ "%.4f"|format(total_cost / total_usage if total_usage > 0 else 0) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-comments fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика по моделям -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Статистика по моделям</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Модель</th>
+                                    <th>Запросов</th>
+                                    <th>Стоимость</th>
+                                    <th>Токенов</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in model_stats %}
+                                <tr>
+                                    <td>{{ stat.model }}</td>
+                                    <td>{{ stat.count }}</td>
+                                    <td>${{ "%.4f"|format(stat.total_cost) }}</td>
+                                    <td>{{ "{:,}".format(stat.total_tokens) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Статистика по назначению</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Назначение</th>
+                                    <th>Запросов</th>
+                                    <th>Стоимость</th>
+                                    <th>Токенов</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in purpose_stats %}
+                                <tr>
+                                    <td>{{ stat.purpose }}</td>
+                                    <td>{{ stat.count }}</td>
+                                    <td>${{ "%.4f"|format(stat.total_cost) }}</td>
+                                    <td>{{ "{:,}".format(stat.total_tokens) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние запросы -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Последние запросы</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Модель</th>
+                            <th>Назначение</th>
+                            <th>Токены</th>
+                            <th>Стоимость</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usage in recent_usage %}
+                        <tr>
+                            <td>{{ usage.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ usage.model }}</td>
+                            <td>{{ usage.purpose }}</td>
+                            <td>{{ "{:,}".format(usage.total_tokens) }}</td>
+                            <td>${{ "%.4f"|format(usage.cost_usd) }}</td>
+                            <td>
+                                {% if usage.success %}
+                                <span class="badge badge-success">Успешно</span>
+                                {% else %}
+                                <span class="badge badge-danger">Ошибка</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
