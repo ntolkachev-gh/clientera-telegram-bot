@@ -135,6 +135,67 @@ async def client_detail(request: Request, client_id: int, db: Session = Depends(
     })
 
 
+@app.get("/dialogues", response_class=HTMLResponse)
+async def dialogues_list(request: Request, db: Session = Depends(get_db),
+                        current_user: str = Depends(get_current_user)):
+    """Список диалогов пользователей"""
+    
+    # Получаем клиентов с количеством сообщений и последней активностью
+    clients_with_stats = db.query(
+        Client,
+        func.count(Message.id).label('messages_count'),
+        func.max(Message.created_at).label('last_message_at')
+    ).join(Message).group_by(Client.id).order_by(
+        desc(func.max(Message.created_at))
+    ).all()
+    
+    return templates.TemplateResponse("dialogues.html", {
+        "request": request,
+        "clients_with_stats": clients_with_stats
+    })
+
+
+@app.get("/dialogues/{client_id}", response_class=HTMLResponse)
+async def dialogue_detail(request: Request, client_id: int, db: Session = Depends(get_db),
+                         current_user: str = Depends(get_current_user)):
+    """Детальная страница диалога с пользователем"""
+    
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+    
+    # Получаем все сообщения клиента, отсортированные по времени
+    messages = db.query(Message).filter(
+        Message.client_id == client_id
+    ).order_by(Message.created_at).all()
+    
+    # Группируем сообщения по сессиям
+    sessions_data = {}
+    for message in messages:
+        session_id = message.session_id
+        if session_id not in sessions_data:
+            session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+            sessions_data[session_id] = {
+                "session": session,
+                "messages": []
+            }
+        sessions_data[session_id]["messages"].append(message)
+    
+    # Сортируем сессии по времени начала
+    sorted_sessions = sorted(
+        sessions_data.values(),
+        key=lambda x: x["session"].session_start,
+        reverse=True
+    )
+    
+    return templates.TemplateResponse("dialogue_detail.html", {
+        "request": request,
+        "client": client,
+        "sessions": sorted_sessions,
+        "total_messages": len(messages)
+    })
+
+
 @app.get("/sessions/{session_id}", response_class=HTMLResponse)
 async def session_detail(request: Request, session_id: int, db: Session = Depends(get_db),
                         current_user: str = Depends(get_current_user)):

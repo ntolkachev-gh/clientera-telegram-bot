@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Диалоги пользователей{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Диалоги пользователей</h1>
+        <div>
+            <span class="badge bg-primary">{{ clients_with_stats|length }} активных диалогов</span>
+        </div>
+    </div>
+
+    {% if clients_with_stats %}
+    <div class="row">
+        {% for client, messages_count, last_message_at in clients_with_stats %}
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        {% if client.first_name %}
+                            {{ client.first_name }}
+                            {% if client.last_name %}{{ client.last_name }}{% endif %}
+                        {% else %}
+                            {{ client.username or 'Неизвестно' }}
+                        {% endif %}
+                    </h6>
+                    <span class="badge bg-info">{{ messages_count }} сообщений</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <i class="fas fa-user"></i> ID: {{ client.telegram_id }}
+                        </small>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar"></i> Регистрация: {{ client.created_at.strftime('%d.%m.%Y') }}
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-clock"></i> Последняя активность: 
+                            {% if last_message_at %}
+                                {{ last_message_at.strftime('%d.%m.%Y %H:%M') }}
+                            {% else %}
+                                Нет данных
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div class="d-grid">
+                        <a href="/dialogues/{{ client.id }}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-comments"></i> Просмотреть диалог
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="fas fa-info-circle"></i>
+        Пока нет диалогов с пользователями.
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

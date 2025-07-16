@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Диалог с {{ client.first_name or client.username }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Диалог с 
+                {% if client.first_name %}
+                    {{ client.first_name }}
+                    {% if client.last_name %}{{ client.last_name }}{% endif %}
+                {% else %}
+                    {{ client.username or 'Неизвестно' }}
+                {% endif %}
+            </h1>
+            <p class="text-muted">
+                Telegram ID: {{ client.telegram_id }} | 
+                Сообщений: {{ total_messages }} | 
+                Сессий: {{ sessions|length }}
+            </p>
+        </div>
+        <div>
+            <a href="/dialogues" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Назад к списку
+            </a>
+        </div>
+    </div>
+
+    {% if sessions %}
+    <div class="accordion" id="sessionsAccordion">
+        {% for session_data in sessions %}
+        {% set session = session_data.session %}
+        {% set messages = session_data.messages %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="session{{ session.id }}">
+                <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" 
+                        type="button" data-bs-toggle="collapse" 
+                        data-bs-target="#collapse{{ session.id }}" 
+                        aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" 
+                        aria-controls="collapse{{ session.id }}">
+                    <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                        <span>
+                            <i class="fas fa-comments"></i>
+                            Сессия #{{ session.id }}
+                        </span>
+                        <span class="badge bg-primary">{{ messages|length }} сообщений</span>
+                    </div>
+                </button>
+            </h2>
+            <div id="collapse{{ session.id }}" 
+                 class="accordion-collapse collapse {% if loop.first %}show{% endif %}" 
+                 aria-labelledby="session{{ session.id }}" 
+                 data-bs-parent="#sessionsAccordion">
+                <div class="accordion-body">
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-clock"></i> Начало: {{ session.session_start.strftime('%d.%m.%Y %H:%M') }}
+                            {% if session.session_end %}
+                                | <i class="fas fa-stop"></i> Конец: {{ session.session_end.strftime('%d.%m.%Y %H:%M') }}
+                            {% endif %}
+                            {% if session.is_active %}
+                                | <span class="badge bg-success">Активна</span>
+                            {% else %}
+                                | <span class="badge bg-secondary">Завершена</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                    
+                    <div class="chat-container" style="max-height: 400px; overflow-y: auto;">
+                        {% for message in messages %}
+                        <div class="message mb-3 {% if message.message_type == 'user' %}text-end{% endif %}">
+                            <div class="d-inline-block p-3 rounded {% if message.message_type == 'user' %}bg-primary text-white{% else %}bg-light{% endif %}" 
+                                 style="max-width: 80%;">
+                                <div class="message-content">
+                                    {{ message.content|nl2br }}
+                                </div>
+                                <div class="message-time mt-1">
+                                    <small class="{% if message.message_type == 'user' %}text-white-50{% else %}text-muted{% endif %}">
+                                        {{ message.created_at.strftime('%H:%M') }}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="fas fa-info-circle"></i>
+        У этого пользователя пока нет сообщений.
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.chat-container {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+}
+
+.message .bg-primary {
+    background-color: #007bff !important;
+}
+
+.message .bg-light {
+    background-color: #ffffff !important;
+    border: 1px solid #dee2e6;
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: #e7f1ff;
+    color: #0c63e4;
+}
+</style>
+
+<script>
+// Автоматическая прокрутка к последнему сообщению в активной сессии
+document.addEventListener('DOMContentLoaded', function() {
+    const activeSession = document.querySelector('.accordion-collapse.show');
+    if (activeSession) {
+        const chatContainer = activeSession.querySelector('.chat-container');
+        if (chatContainer) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    }
+});
+</script>
+{% endblock %} 
