@@ -1,11 +1,15 @@
 import asyncio
 import logging
+import nest_asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from database.database import SessionLocal, init_db
 from database.models import Client, Session as ChatSession, Message
 from bot.openai_client import OpenAIClient
 from config import settings
+
+# Применяем nest_asyncio для решения проблем с event loop
+nest_asyncio.apply()
 
 # Настройка логирования
 logging.basicConfig(
@@ -170,10 +174,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        # Создаем новый event loop для Heroku
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(main())
+        asyncio.run(main())
     except Exception as e:
         logger.error(f"Ошибка запуска бота: {e}")
         raise 
