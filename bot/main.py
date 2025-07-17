@@ -216,7 +216,8 @@ def main():
     """Точка входа"""
     bot = TelegramBot()
     import asyncio
-    asyncio.run(bot.run())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(bot.run())
 
 
 if __name__ == "__main__":
