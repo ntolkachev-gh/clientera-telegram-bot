@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from database.database import SessionLocal, init_db
 from bot.dialog_manager import DialogManager
 from bot.embedding import KnowledgeBaseManager
@@ -27,7 +27,6 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("services", self.services_command))
         self.application.add_handler(CommandHandler("masters", self.masters_command))
         self.application.add_handler(CommandHandler("profile", self.profile_command))
-        self.application.add_handler(CallbackQueryHandler(self.button_callback))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
     def _get_target_message(self, update: Update):
@@ -39,7 +38,7 @@ class TelegramBot:
         return None
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /start. Может быть вызвана как из обычного сообщения (/start), так и из callback."""
+        """Обработка команды /start. Теперь без inline-кнопок."""
         user = update.effective_user
         welcome_message = f"""
 👋 Добро пожаловать в салон красоты, {user.first_name}!
@@ -59,23 +58,12 @@ class TelegramBot:
 /profile - ваш профиль
 /help - помощь
         """
-        
-        keyboard = [
-            [InlineKeyboardButton("📋 Услуги", callback_data="services")],
-            [InlineKeyboardButton("👩‍💼 Мастера", callback_data="masters")],
-            [InlineKeyboardButton("📅 Записаться", callback_data="booking")],
-            [InlineKeyboardButton("❓ Задать вопрос", callback_data="question")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        target_msg = self._get_target_message(update)
-        if target_msg:
-            await target_msg.reply_text(welcome_message, reply_markup=reply_markup)
+        if update.message:
+            await update.message.reply_text(welcome_message)
         else:
-            # fallback – отправляем новое сообщение напрямую через бот
-            chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+            chat_id = update.effective_chat.id if update.effective_chat else None
             if chat_id:
-                await context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup)
+                await context.bot.send_message(chat_id=chat_id, text=welcome_message)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /help"""
@@ -104,52 +92,40 @@ class TelegramBot:
 
 Просто пишите естественным языком, я пойму! 😊
         """
-        await update.message.reply_text(help_text)
+        if update.message:
+            await update.message.reply_text(help_text)
+        else:
+            chat_id = update.effective_chat.id if update.effective_chat else None
+            if chat_id:
+                await context.bot.send_message(chat_id=chat_id, text=help_text)
 
     async def services_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /services – может вызываться из команды или callback"""
+        """Обработка команды /services – теперь без inline-кнопок"""
         with SessionLocal() as db:
             dialog_manager = DialogManager(db)
             services_text = await dialog_manager.youclients_api.format_services_list()
-            
-            keyboard = [
-                [InlineKeyboardButton("📅 Записаться", callback_data="booking")],
-                [InlineKeyboardButton("🏠 Главное меню", callback_data="start")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            target_msg = self._get_target_message(update)
-            if target_msg:
-                await target_msg.reply_text(services_text, reply_markup=reply_markup)
+            if update.message:
+                await update.message.reply_text(services_text)
             else:
-                chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+                chat_id = update.effective_chat.id if update.effective_chat else None
                 if chat_id:
-                    await context.bot.send_message(chat_id=chat_id, text=services_text, reply_markup=reply_markup)
+                    await context.bot.send_message(chat_id=chat_id, text=services_text)
 
     async def masters_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /masters – может вызываться из команды или callback"""
+        """Обработка команды /masters – теперь без inline-кнопок"""
         with SessionLocal() as db:
             dialog_manager = DialogManager(db)
             masters_text = await dialog_manager.youclients_api.format_masters_list()
-            
-            keyboard = [
-                [InlineKeyboardButton("📅 Записаться", callback_data="booking")],
-                [InlineKeyboardButton("🏠 Главное меню", callback_data="start")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            target_msg = self._get_target_message(update)
-            if target_msg:
-                await target_msg.reply_text(masters_text, reply_markup=reply_markup)
+            if update.message:
+                await update.message.reply_text(masters_text)
             else:
-                chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+                chat_id = update.effective_chat.id if update.effective_chat else None
                 if chat_id:
-                    await context.bot.send_message(chat_id=chat_id, text=masters_text, reply_markup=reply_markup)
+                    await context.bot.send_message(chat_id=chat_id, text=masters_text)
 
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /profile – может вызываться из команды или callback"""
+        """Обработка команды /profile – теперь без inline-кнопок"""
         user = update.effective_user
-        
         with SessionLocal() as db:
             dialog_manager = DialogManager(db)
             client = dialog_manager.get_or_create_client(str(user.id), {
@@ -157,9 +133,7 @@ class TelegramBot:
                 "first_name": user.first_name,
                 "last_name": user.last_name
             })
-            
             stats = dialog_manager.get_client_stats(client.id)
-            
             profile_text = f"""
 👤 **Ваш профиль:**
 
@@ -175,96 +149,49 @@ class TelegramBot:
 
 🗓️ Последний визит: {stats.get('last_visit', 'Не указано')}
             """
-            
-            target_msg = self._get_target_message(update)
-            if target_msg:
-                await target_msg.reply_text(profile_text)
+            if update.message:
+                await update.message.reply_text(profile_text)
             else:
-                chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+                chat_id = update.effective_chat.id if update.effective_chat else None
                 if chat_id:
                     await context.bot.send_message(chat_id=chat_id, text=profile_text)
 
-    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка нажатий на кнопки"""
-        query = update.callback_query
-        await query.answer()
-        
-        if query.data == "services":
-            await self.services_command(update, context)
-        elif query.data == "masters":
-            await self.masters_command(update, context)
-        elif query.data == "booking":
-            await query.edit_message_text(
-                "📅 Для записи напишите что вас интересует, например:\n\n"
-                "• 'Хочу записаться на маникюр'\n"
-                "• 'Запиши меня к Наталье на завтра'\n"
-                "• 'Нужен педикюр на пятницу вечером'"
-            )
-        elif query.data == "question":
-            await query.edit_message_text(
-                "❓ Задайте любой вопрос о салоне, например:\n\n"
-                "• 'Сколько стоит маникюр?'\n"
-                "• 'Где вы находитесь?'\n"
-                "• 'Какие у вас есть услуги?'"
-            )
-        elif query.data == "start":
-            await self.start_command(update, context)
-        # Обработка демо-кнопок
-        elif query.data == "demo_booking":
-            await query.edit_message_text(
-                "📅 Отлично! Для записи напишите что вас интересует:\n\n"
-                "• 'Хочу записаться на маникюр'\n"
-                "• 'Запиши меня к Наталье на завтра'\n"
-                "• 'Нужен педикюр на пятницу вечером'\n\n"
-                "Или просто скажите, какая услуга вас интересует! 😊"
-            )
-        elif query.data == "demo_services":
-            await self.services_command(update, context)
-        elif query.data == "demo_masters":
-            await self.masters_command(update, context)
-        elif query.data == "demo_help":
-            await query.edit_message_text(
-                "❓ Я помогу вам с любыми вопросами!\n\n"
-                "• Записаться на услуги\n"
-                "• Узнать цены\n"
-                "• Выбрать мастера\n"
-                "• Найти удобное время\n\n"
-                "Просто напишите ваш вопрос! 😊"
-            )
-
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка текстовых сообщений"""
-        user = update.effective_user
-        message_text = update.message.text
-        
+        user = update.effective_user if update.effective_user else None
+        message_text = update.message.text if update.message else None
+        chat_id = update.effective_chat.id if update.effective_chat else None
         # Показываем, что бот печатает
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        
+        if chat_id is not None:
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        # Если нет текста сообщения или пользователя — не обрабатывать
+        if not user or not message_text:
+            return
         try:
             with SessionLocal() as db:
                 dialog_manager = DialogManager(db)
-                
                 user_data = {
-                    "username": user.username,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name
+                    "username": getattr(user, "username", None),
+                    "first_name": getattr(user, "first_name", None),
+                    "last_name": getattr(user, "last_name", None)
                 }
-                
                 response = await dialog_manager.process_message(
-                    str(user.id), 
-                    user_data, 
+                    str(user.id),
+                    user_data,
                     message_text,
-                    update.message.message_id
+                    update.message.message_id if update.message else None
                 )
-                
-                await update.message.reply_text(response)
-                
+                if update.message:
+                    await update.message.reply_text(response)
+                elif chat_id:
+                    await context.bot.send_message(chat_id=chat_id, text=response)
         except Exception as e:
             logger.error(f"Ошибка при обработке сообщения: {e}")
-            await update.message.reply_text(
-                "Извините, произошла ошибка при обработке вашего сообщения. "
-                "Попробуйте еще раз или обратитесь к администратору."
-            )
+            error_text = "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз или обратитесь к администратору."
+            if update.message:
+                await update.message.reply_text(error_text)
+            elif chat_id:
+                await context.bot.send_message(chat_id=chat_id, text=error_text)
 
     def run(self):
         """Синхронный запуск бота (без запуска дополнительного цикла asyncio)."""
