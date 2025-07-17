@@ -6,6 +6,7 @@ from database.database import SessionLocal, init_db
 from bot.dialog_manager import DialogManager
 from bot.embedding import KnowledgeBaseManager
 from config import settings
+import nest_asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -212,13 +213,17 @@ class TelegramBot:
         await self.application.run_polling(drop_pending_updates=True)
 
 
-def main():
+async def main():
     """Точка входа"""
     bot = TelegramBot()
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(bot.run())
+    await bot.run()
 
 
 if __name__ == "__main__":
-    main() 
+    import asyncio
+    nest_asyncio.apply()
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Ошибка запуска бота: {e}")
+        raise 
