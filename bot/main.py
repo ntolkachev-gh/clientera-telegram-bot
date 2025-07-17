@@ -30,8 +30,16 @@ class TelegramBot:
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
+    def _get_target_message(self, update: Update):
+        """Пытается получить объект Message, чтобы можно было отправить ответ как из обычного сообщения, так и из callback_query"""
+        if update.message:
+            return update.message
+        if update.callback_query and update.callback_query.message:
+            return update.callback_query.message
+        return None
+
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /start"""
+        """Обработка команды /start. Может быть вызвана как из обычного сообщения (/start), так и из callback."""
         user = update.effective_user
         welcome_message = f"""
 👋 Добро пожаловать в салон красоты, {user.first_name}!
@@ -59,8 +67,15 @@ class TelegramBot:
             [InlineKeyboardButton("❓ Задать вопрос", callback_data="question")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+
+        target_msg = self._get_target_message(update)
+        if target_msg:
+            await target_msg.reply_text(welcome_message, reply_markup=reply_markup)
+        else:
+            # fallback – отправляем новое сообщение напрямую через бот
+            chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+            if chat_id:
+                await context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /help"""
@@ -92,7 +107,7 @@ class TelegramBot:
         await update.message.reply_text(help_text)
 
     async def services_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /services"""
+        """Обработка команды /services – может вызываться из команды или callback"""
         with SessionLocal() as db:
             dialog_manager = DialogManager(db)
             services_text = await dialog_manager.youclients_api.format_services_list()
@@ -102,11 +117,17 @@ class TelegramBot:
                 [InlineKeyboardButton("🏠 Главное меню", callback_data="start")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(services_text, reply_markup=reply_markup)
+
+            target_msg = self._get_target_message(update)
+            if target_msg:
+                await target_msg.reply_text(services_text, reply_markup=reply_markup)
+            else:
+                chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+                if chat_id:
+                    await context.bot.send_message(chat_id=chat_id, text=services_text, reply_markup=reply_markup)
 
     async def masters_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /masters"""
+        """Обработка команды /masters – может вызываться из команды или callback"""
         with SessionLocal() as db:
             dialog_manager = DialogManager(db)
             masters_text = await dialog_manager.youclients_api.format_masters_list()
@@ -116,11 +137,17 @@ class TelegramBot:
                 [InlineKeyboardButton("🏠 Главное меню", callback_data="start")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(masters_text, reply_markup=reply_markup)
+
+            target_msg = self._get_target_message(update)
+            if target_msg:
+                await target_msg.reply_text(masters_text, reply_markup=reply_markup)
+            else:
+                chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+                if chat_id:
+                    await context.bot.send_message(chat_id=chat_id, text=masters_text, reply_markup=reply_markup)
 
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /profile"""
+        """Обработка команды /profile – может вызываться из команды или callback"""
         user = update.effective_user
         
         with SessionLocal() as db:
@@ -149,7 +176,13 @@ class TelegramBot:
 🗓️ Последний визит: {stats.get('last_visit', 'Не указано')}
             """
             
-            await update.message.reply_text(profile_text)
+            target_msg = self._get_target_message(update)
+            if target_msg:
+                await target_msg.reply_text(profile_text)
+            else:
+                chat_id = update.effective_chat.id if update.effective_chat else (update.callback_query.from_user.id if update.callback_query else None)
+                if chat_id:
+                    await context.bot.send_message(chat_id=chat_id, text=profile_text)
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка нажатий на кнопки"""
