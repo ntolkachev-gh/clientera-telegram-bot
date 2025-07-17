@@ -40,26 +40,49 @@ class SimpleTelegramBot:
         welcome_message = f"""
 👋 Добро пожаловать в салон красоты, {user.first_name}!
 
-Это тестовая версия бота. Я могу:
-• 💬 Общаться с вами
-• 🤖 Отвечать на вопросы с помощью GPT-4
-• 💾 Запоминать нашу переписку
+Я помогу вам:
+• 📅 Записаться на услуги
+• 💬 Ответить на вопросы о салоне
+• 👩‍💼 Выбрать подходящего мастера
+• ⏰ Найти удобное время
 
-Напишите мне что-нибудь, и я отвечу!
+Просто напишите что вас интересует, например:
+"Хочу записаться на маникюр к Наталье на завтра"
+
+Или воспользуйтесь командами:
+/services - список услуг
+/masters - наши мастера
+/profile - ваш профиль
+/help - помощь
         """
-        
         await update.message.reply_text(welcome_message)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /help"""
         help_text = """
-🤖 Тестовая версия бота
+🤖 Как пользоваться ботом:
 
-Доступные команды:
-• /start - приветствие
+📝 **Запись на услуги:**
+• "Хочу записаться на маникюр"
+• "Запиши меня к Наталье на завтра в 15:00"
+• "Нужен педикюр на пятницу"
+
+❓ **Вопросы о салоне:**
+• "Сколько стоит маникюр?"
+• "Какие у вас есть услуги?"
+• "Где находится салон?"
+
+👤 **Профиль:**
+• /profile - посмотреть свой профиль
+• Бот запоминает ваши предпочтения
+
+📞 **Команды:**
+• /start - главное меню
+• /services - список услуг
+• /masters - наши мастера
 • /help - эта справка
 
-Просто напишите мне сообщение, и я отвечу с помощью GPT-4! 😊
+Просто пишите естественным языком, я пойму! 😊
         """
         await update.message.reply_text(help_text)
 
@@ -172,102 +195,106 @@ class SimpleTelegramBot:
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка текстовых сообщений"""
-        user = update.effective_user
-        message_text = update.message.text
-        
-        # Показываем, что бот печатает
+        user = update.effective_user if update.effective_user else None
+        message_text = update.message.text if update.message else None
+        if not user or not message_text:
+            return
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        
         try:
-            # Получаем или создаем клиента
             user_data = {
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name
+                "username": getattr(user, "username", None),
+                "first_name": getattr(user, "first_name", None),
+                "last_name": getattr(user, "last_name", None)
             }
-            
             client = self.get_or_create_client(str(user.id), user_data)
-            
-            # Сохраняем сообщение пользователя
             with SessionLocal() as db:
-                # Создаем простую сессию
+                # Получаем актуального клиента из БД (объект, а не колонку)
+                client_db = db.query(Client).filter(Client.telegram_id == str(user.id)).first()
+                if client_db is None:
+                    # Если клиента нет, создаём и повторно получаем
+                    new_client = Client(
+                        telegram_id=str(user.id),
+                        username=user_data.get("username"),
+                        first_name=user_data.get("first_name"),
+                        last_name=user_data.get("last_name")
+                    )
+                    db.add(new_client)
+                    db.commit()
+                    db.refresh(new_client)
+                    client_db = new_client
+                if client_db is None:
+                    logger.error("Не удалось получить или создать клиента")
+                    return
                 session = ChatSession(
-                    client_id=client.id,
+                    client_id=client_db.id,
                     is_active=True
                 )
                 db.add(session)
                 db.commit()
                 db.refresh(session)
-                
-                # Сохраняем сообщение пользователя
                 user_message = Message(
-                    client_id=client.id,
+                    client_id=client_db.id,
                     session_id=session.id,
                     message_type="user",
                     content=message_text,
-                    telegram_message_id=update.message.message_id
+                    telegram_message_id=update.message.message_id if update.message else None
                 )
                 db.add(user_message)
                 db.commit()
-                
-                # Получаем ответ от GPT-4
                 openai_client = OpenAIClient(db)
-                
-                # Получаем историю сообщений для контекста
                 recent_messages = db.query(Message).filter(
-                    Message.client_id == client.id
+                    Message.client_id == client_db.id
                 ).order_by(Message.created_at.desc()).limit(10).all()
-                
-                # Создаем список сообщений с историей
+                # Новый системный промпт
+                system_prompt = (
+                    "Ты — дружелюбный и профессиональный ассистент салона красоты.\n\n"
+                    "Правила ответа:\n"
+                    "1. Используй эмодзи, чтобы выделять ключевые моменты (но не перегружай).\n"
+                    "2. Структурируй ответ: короткие абзацы, списки через •.\n"
+                    "3. Если предлагаешь варианты даты/времени или услуг — выводи их на отдельных строках.\n"
+                    "4. Всегда отвечай на русском.\n"
+                    "5. Если нужна дополнительная информация для записи — чётко перечисли, что ещё уточнить.\n\n"
+                    "Контекст о клиенте:\n"
+                    f"• Имя клиента: {client_db.first_name or 'Неизвестно'}\n"
+                    f"• Любимые услуги: {', '.join(getattr(client_db, 'favorite_services', []) or []) or 'нет данных'}\n"
+                    f"• Любимые мастера: {', '.join(getattr(client_db, 'favorite_masters', []) or []) or 'нет данных'}\n"
+                    f"• Предпочитаемое время: {', '.join(getattr(client_db, 'preferred_time_slots', []) or []) or 'нет данных'}\n\n"
+                    "Всегда будь приветлив и помогай клиенту оформить запись или найти информацию."
+                )
                 messages = [
-                    {
-                        "role": "system",
-                        "content": f"""Ты - дружелюбный помощник в салоне красоты. 
-                        Общайся с клиентом {client.first_name or 'дорогой клиент'} тепло и профессионально.
-                        Отвечай на вопросы о салоне, услугах, записи.
-                        Если не знаешь точной информации, честно скажи об этом.
-                        Важно: помни контекст разговора и не спрашивай информацию, которую клиент уже предоставил."""
-                    }
+                    {"role": "system", "content": system_prompt}
                 ]
-                
-                # Добавляем историю сообщений (в обратном порядке)
+                # Гарантируем, что recent_messages — это список объектов Message
                 for msg in reversed(recent_messages):
-                    if msg.message_type == "user":
-                        messages.append({"role": "user", "content": msg.content})
-                    elif msg.message_type == "bot":
-                        messages.append({"role": "assistant", "content": msg.content})
-                
-                # Добавляем текущее сообщение пользователя
+                    if hasattr(msg, 'message_type') and hasattr(msg, 'content') and isinstance(msg.content, str):
+                        if msg.message_type == "user":
+                            messages.append({"role": "user", "content": msg.content})
+                        elif msg.message_type == "bot":
+                            messages.append({"role": "assistant", "content": msg.content})
                 messages.append({"role": "user", "content": message_text})
-                
-                # Проверяем, не является ли это записью на услугу
-                appointment_response = await self.process_appointment_booking(message_text, client)
-                
+                appointment_response = await self.process_appointment_booking(message_text, client_db)
                 if appointment_response:
-                    # Если это запись, отправляем ответ сразу
                     response = appointment_response
                 else:
-                    # Иначе получаем ответ от GPT-4
-                    response = await openai_client.chat_completion(messages, client.id)
-                
-                # Сохраняем ответ бота
+                    cid = getattr(client_db, 'id', None)
+                    response = await openai_client.chat_completion(messages, int(cid) if isinstance(cid, int) else None)
                 bot_message = Message(
-                    client_id=client.id,
+                    client_id=client_db.id if hasattr(client_db, 'id') else None,
                     session_id=session.id,
                     message_type="bot",
                     content=response
                 )
                 db.add(bot_message)
                 db.commit()
-                
-                await update.message.reply_text(response)
-                
+                if update.message:
+                    await update.message.reply_text(response)
         except Exception as e:
             logger.error(f"Ошибка при обработке сообщения: {e}")
-            await update.message.reply_text(
-                "Извините, произошла ошибка при обработке вашего сообщения. "
-                "Попробуйте еще раз или обратитесь к администратору."
-            )
+            if update.message:
+                await update.message.reply_text(
+                    "Извините, произошла ошибка при обработке вашего сообщения. "
+                    "Попробуйте еще раз или обратитесь к администратору."
+                )
 
     async def run(self):
         """Запуск бота"""
