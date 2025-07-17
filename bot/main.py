@@ -266,30 +266,30 @@ class TelegramBot:
                 "Попробуйте еще раз или обратитесь к администратору."
             )
 
-    async def run(self):
-        """Запуск бота"""
+    def run(self):
+        """Синхронный запуск бота (без запуска дополнительного цикла asyncio)."""
         logger.info("Запуск Telegram бота...")
-        
+
         # Инициализация базы данных
         init_db()
-        
-        # Загрузка базы знаний
+
+        # Загрузка базы знаний (асинхронная, поэтому создаём временный цикл)
         try:
             kb_manager = KnowledgeBaseManager()
-            await kb_manager.load_knowledge_base()
+            asyncio.run(kb_manager.load_knowledge_base())
             logger.info("База знаний загружена")
         except Exception as e:
             logger.error(f"Ошибка при загрузке базы знаний: {e}")
-        
-        # Запуск бота
-        await self.application.run_polling(drop_pending_updates=True)
+
+        # Запускаем polling (блокирующий, управляет собственным циклом внутри)
+        self.application.run_polling(drop_pending_updates=True)
 
 
-async def main():
-    """Главная функция"""
+def main():
+    """Точка входа"""
     bot = TelegramBot()
-    await bot.run()
+    bot.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    main() 
