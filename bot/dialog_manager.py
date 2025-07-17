@@ -247,33 +247,22 @@ class DialogManager:
         return False
 
     def _is_booking_confirmation(self, message_text: str) -> bool:
-        """Проверяет, является ли сообщение подтверждением записи"""
+        """Проверяет, содержит ли сообщение информацию, достаточную для подтверждения записи"""
         import re
-        
-        # Паттерны для даты и времени
-        date_patterns = [
-            r'\d{1,2}\.\d{1,2}\.\d{4}',  # 17.07.2025
-            r'\d{1,2}\.\d{1,2}',  # 17.07
-            r'\d{1,2}/\d{1,2}/\d{4}',  # 17/07/2025
-            r'\d{1,2}-\d{1,2}-\d{4}',  # 17-07-2025
+        # Если есть явные цифры даты и времени
+        date_pattern = r"\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?"
+        time_pattern = r"\d{1,2}[:.]\d{2}"
+        if re.search(date_pattern, message_text) and re.search(time_pattern, message_text):
+            return True
+
+        # Дополнительная проверка на слова дня недели + часть дня (утром/днем/вечером)
+        weekdays = [
+            'понедельник', 'вторник', 'сред', 'четверг', 'пятниц', 'суббот', 'воскрес'
         ]
-        
-        time_patterns = [
-            r'\d{1,2}:\d{2}',  # 14:30
-            r'\d{1,2}\.\d{2}',  # 14.30
-        ]
-        
-        # Проверяем наличие даты
-        has_date = any(re.search(pattern, message_text) for pattern in date_patterns)
-        
-        # Проверяем наличие времени
-        has_time = any(re.search(pattern, message_text) for pattern in time_patterns)
-        
-        # Проверяем ключевые слова подтверждения
-        confirmation_words = ['да', 'подтверждаю', 'записываю', 'хочу', 'хотел бы', 'можно']
-        has_confirmation = any(word in message_text.lower() for word in confirmation_words)
-        
-        return (has_date and has_time) or (has_confirmation and (has_date or has_time))
+        if any(w in message_text.lower() for w in weekdays):
+            if any(x in message_text.lower() for x in ['утр', 'дн', 'веч', 'ноч']):
+                return True
+        return False
 
     async def _handle_booking_request(self, analysis: Dict[str, Any], client_profile: Dict[str, Any]) -> str:
         """Обработка запроса на запись"""
@@ -282,6 +271,47 @@ class DialogManager:
         preferred_date = analysis.get("preferred_date")
         preferred_time = analysis.get("preferred_time")
         needs_clarification = analysis.get("needs_clarification", [])
+
+        # Если все данные уже есть – создаём запись сразу
+        if not needs_clarification and preferred_date and preferred_time:
+            try:
+                from datetime import datetime
+                # Формируем datetime
+                appointment_datetime = datetime.strptime(
+                    f"{preferred_date} {preferred_time}", "%Y-%m-%d %H:%M"
+                )
+                # Дефолты, если GPT не распознал
+                service = service_name or "Не указана"
+                master = master_name or "Наш мастер"
+
+                # Сохраняем в БД (локально)
+                from database.models import Appointment, Client
+                client_id = client_profile.get("id")
+                client_obj = self.db.query(Client).filter(Client.id == client_id).first()
+                if client_obj:
+                    appointment = Appointment(
+                        client_id=client_obj.id,
+                        service_name=service,
+                        master_name=master,
+                        appointment_datetime=appointment_datetime,
+                        duration_minutes=60,
+                        status="scheduled"
+                    )
+                    self.db.add(appointment)
+                    self.db.commit()
+                    self.db.refresh(appointment)
+
+                    return (
+                        f"✅ Запись создана!\n\n"
+                        f"📅 {appointment_datetime.strftime('%d.%m.%Y')}\n"
+                        f"⏰ {appointment_datetime.strftime('%H:%M')}\n"
+                        f"🎯 {service}\n"
+                        f"👩‍💼 {master}\n\n"
+                        "Если нужно изменить или отменить запись, дайте знать."
+                    )
+            except Exception as e:
+                # Если что-то пошло не так – падаем в обычный поток слотов
+                print(f"Ошибка автосоздания записи: {e}")
         
         # Если нужны уточнения
         if needs_clarification:
@@ -344,7 +374,7 @@ class DialogManager:
             r'(\d{1,2})\.(\d{2})',  # 14.30
         ]
         
-        # Ищем дату
+        # Ищем дату или день недели
         appointment_date = None
         for pattern in date_patterns:
             match = re.search(pattern, message_text)
@@ -373,10 +403,42 @@ class DialogManager:
                     continue
         
         if not appointment_date:
-            return "Пожалуйста, укажите дату записи в формате ДД.ММ.ГГГГ (например, 17.07.2025)"
-        
+            # Если дата не найдена, попробуем распознать по дню недели
+            weekday_map = {
+                'понедельник': 0,
+                'вторник': 1,
+                'сред': 2,
+                'четверг': 3,
+                'пятниц': 4,
+                'суббот': 5,
+                'воскрес': 6
+            }
+            for wkey, wval in weekday_map.items():
+                if wkey in message_text.lower():
+                    from datetime import timedelta
+                    today = datetime.now()
+                    days_ahead = (wval - today.weekday()) % 7
+                    if days_ahead == 0:
+                        days_ahead = 7  # следующая неделя
+                    appointment_date = (today + timedelta(days=days_ahead)).replace(hour=0, minute=0)
+                    break
+
+        # Если время не указано словами, задаём по части дня
         if not appointment_time:
-            return "Пожалуйста, укажите время записи в формате ЧЧ:ММ (например, 14:30)"
+            lower_msg = message_text.lower()
+            if any(word in lower_msg for word in ['утр', 'утром', 'утро']):
+                appointment_time = datetime.now().replace(hour=10, minute=0)
+            elif any(word in lower_msg for word in ['дн', 'днем', 'днём', 'день']):
+                appointment_time = datetime.now().replace(hour=13, minute=0)
+            elif any(word in lower_msg for word in ['веч', 'вечер', 'вечером']):
+                appointment_time = datetime.now().replace(hour=18, minute=0)
+
+        # Всё ещё нет даты или времени?
+        if not appointment_date:
+            return "Пожалуйста, укажите точную дату (например, 20.07.2025) или день недели."
+
+        if not appointment_time:
+            return "Пожалуйста, уточните время (например, 14:30, утро, день, вечер)."
         
         # Создаем полную дату и время
         appointment_datetime = appointment_date.replace(
@@ -500,16 +562,7 @@ class DialogManager:
         # Системное сообщение
         system_message = {
             "role": "system",
-            "content": f"""Ты - помощник в салоне красоты. 
-            Общайся дружелюбно и профессионально с клиентом {client_profile['name']}.
-            Помогай с записью на услуги, отвечай на вопросы о салоне.
-            Если клиент хочет записаться, уточни услугу, мастера и время.
-            
-            Информация о клиенте:
-            - Любимые услуги: {client_profile['favorite_services']}
-            - Любимые мастера: {client_profile['favorite_masters']}
-            - Предпочитаемое время: {client_profile['preferred_time_slots']}
-            """
+            "content": f"""Ты — дружелюбный и профессиональный ассистент салона красоты.\n\nПравила ответа:\n1. Используй эмодзи, чтобы выделять ключевые моменты (но не перегружай).\n2. Структурируй ответ: короткие абзацы, списки через •.\n3. Если предлагаешь варианты даты/времени или услуг — выводи их на отдельных строках.\n4. Всегда отвечай на русском.\n5. Если нужна дополнительная информация для записи — чётко перечисли, что ещё уточнить.\n\nКонтекст о клиенте:\n• Имя клиента: {client_profile['name'] or 'Неизвестно'}\n• Любимые услуги: {', '.join(client_profile['favorite_services']) or 'нет данных'}\n• Любимые мастера: {', '.join(client_profile['favorite_masters']) or 'нет данных'}\n• Предпочитаемое время: {', '.join(client_profile['preferred_time_slots']) or 'нет данных'}\n\nВсегда будь приветлив и помогай клиенту оформить запись или найти информацию."""
         }
         
         messages = [system_message] + context_messages + [{"role": "user", "content": message_text}]
