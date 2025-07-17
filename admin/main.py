@@ -169,39 +169,17 @@ async def dialogues_list(request: Request, db: Session = Depends(get_db),
 async def dialogue_detail(request: Request, client_id: int, db: Session = Depends(get_db),
                          current_user: str = Depends(get_current_user)):
     """Детальная страница диалога с пользователем"""
-    
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Клиент не найден")
-    
-    # Получаем все сообщения клиента, отсортированные по времени
+    # Получаем все сообщения клиента, отсортированные по убыванию времени (новые сверху)
     messages = db.query(Message).filter(
         Message.client_id == client_id
-    ).order_by(Message.created_at).all()
-    
-    # Группируем сообщения по сессиям
-    sessions_data = {}
-    for message in messages:
-        session_id = message.session_id
-        if session_id not in sessions_data:
-            session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-            sessions_data[session_id] = {
-                "session": session,
-                "messages": []
-            }
-        sessions_data[session_id]["messages"].append(message)
-    
-    # Сортируем сессии по времени начала
-    sorted_sessions = sorted(
-        sessions_data.values(),
-        key=lambda x: x["session"].session_start,
-        reverse=True
-    )
-    
+    ).order_by(Message.created_at.desc()).all()
     return templates.TemplateResponse("dialogue_detail.html", {
         "request": request,
         "client": client,
-        "sessions": sorted_sessions,
+        "messages": messages,
         "total_messages": len(messages)
     })
 
