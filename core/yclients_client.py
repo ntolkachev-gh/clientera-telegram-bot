@@ -517,10 +517,31 @@ class YclientsClient:
                         return data
                     else:
                         logger.error(f"❌ API вернул ошибку: {data}")
-                        return {'data': {'booking_dates': []}}
+                        return {'data': {'booking_dates': []}, 'error': data.get('meta', {}).get('message', 'Неизвестная ошибка')}
+                elif response.status_code == 404:
+                    # Специальная обработка ошибки 404 - мастер недоступен для услуги
+                    try:
+                        error_data = response.json()
+                        error_message = error_data.get('meta', {}).get('message', 'Сотрудник недоступен для записи')
+                        logger.error(f"❌ Мастер {staff_id} недоступен для услуги {service_id}: {error_message}")
+                        return {
+                            'data': {'booking_dates': []},
+                            'error': error_message,
+                            'error_code': 'STAFF_UNAVAILABLE',
+                            'staff_id': staff_id,
+                            'service_id': service_id
+                        }
+                    except:
+                        return {
+                            'data': {'booking_dates': []},
+                            'error': 'Сотрудник недоступен для записи на выбранную услугу',
+                            'error_code': 'STAFF_UNAVAILABLE',
+                            'staff_id': staff_id,
+                            'service_id': service_id
+                        }
                 else:
                     logger.error(f"❌ Ошибка API get_available_days: {response.status_code} - {response.text}")
-                    return {'data': {'booking_dates': []}}
+                    return {'data': {'booking_dates': []}, 'error': f'Ошибка API: {response.status_code}'}
 
         except Exception as e:
             logger.error(f"❌ Ошибка при запросе доступных дней: {str(e)}")

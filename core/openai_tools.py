@@ -1138,6 +1138,25 @@ class YclientsToolsHandler:
             logger.info("📞 Вызываем yclients.get_available_days()...")
             booking_days = await self.yclients.get_available_days(staff_id=staff_id, service_id=service_id)
 
+            # Проверяем на ошибку недоступности мастера
+            if 'error' in booking_days:
+                error_code = booking_days.get('error_code')
+                if error_code == 'STAFF_UNAVAILABLE':
+                    logger.warning(f"⚠️ Мастер {staff_id} недоступен для услуги {service_id}")
+                    return {
+                        "error": booking_days['error'],
+                        "error_code": "STAFF_UNAVAILABLE",
+                        "staff_id": staff_id,
+                        "service_id": service_id,
+                        "suggestion": "Попробуйте выбрать другого мастера или другую услугу",
+                        "success": False
+                    }
+                else:
+                    return {
+                        "error": booking_days['error'],
+                        "success": False
+                    }
+
             days = booking_days['data'].get('booking_dates', [])
             logger.info(f"📥 Получено {len(days)} доступных дней")
 
