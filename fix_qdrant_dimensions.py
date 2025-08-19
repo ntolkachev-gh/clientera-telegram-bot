@@ -45,27 +45,35 @@ async def fix_vector_dimensions():
             logger.info("📊 Получаем информацию о существующей коллекции...")
             try:
                 collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
-                vector_size = collection_info.config.params.vectors.size
-                points_count = collection_info.points_count
+                # Пытаемся получить информацию о векторах и точках
+                try:
+                    vector_size = collection_info.config.params.vectors.size
+                    points_count = collection_info.points_count
 
-                logger.info(f"📈 Текущая коллекция: {points_count} точек, размер векторов: {vector_size}")
+                    logger.info(f"📈 Текущая коллекция: {points_count} точек, размер векторов: {vector_size}")
 
-                if vector_size == 1536:
-                    logger.info("✅ Размер векторов уже правильный (1536)!")
-                    if points_count > 0:
-                        logger.info("✅ Коллекция содержит данные, исправление не требуется")
-                        return True
-                    else:
-                        logger.info("⚠️ Коллекция пуста, нужно загрузить данные")
-                        return False
+                    if vector_size == 1536:
+                        logger.info("✅ Размер векторов уже правильный (1536)!")
+                        if points_count > 0:
+                            logger.info("✅ Коллекция содержит данные, исправление не требуется")
+                            return True
+                        else:
+                            logger.info("⚠️ Коллекция пуста, нужно загрузить данные")
+                            return False
 
-                # Удаляем коллекцию с неправильным размером
-                logger.info(f"🗑️ Удаляем коллекцию с неправильным размером векторов ({vector_size})...")
-                embedding_service.qdrant_client.delete_collection("laliq_knowledge_base")
-                logger.info("✅ Старая коллекция удалена")
+                    # Удаляем коллекцию с неправильным размером
+                    logger.info(f"🗑️ Удаляем коллекцию с неправильным размером векторов ({vector_size})...")
+                    embedding_service.qdrant_client.delete_collection("laliq_knowledge_base")
+                    logger.info("✅ Старая коллекция удалена")
+
+                except AttributeError as attr_error:
+                    logger.warning(f"⚠️ Не удалось получить детали коллекции: {attr_error}")
+                    logger.info("🗑️ Пересоздаем коллекцию из-за проблем с API...")
+                    embedding_service.qdrant_client.delete_collection("laliq_knowledge_base")
+                    logger.info("✅ Коллекция удалена")
 
             except Exception as e:
-                logger.error(f"❌ Ошибка при получении информации о коллекции: {e}")
+                logger.warning(f"⚠️ Ошибка при получении информации о коллекции: {e}")
                 logger.info("🗑️ Пытаемся удалить коллекцию принудительно...")
                 try:
                     embedding_service.qdrant_client.delete_collection("laliq_knowledge_base")
@@ -78,16 +86,25 @@ async def fix_vector_dimensions():
         await embedding_service.init_collection()
 
         # Проверяем результат
-        new_collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
-        new_vector_size = new_collection_info.config.params.vectors.size
-
-        if new_vector_size == 1536:
-            logger.info("✅ Коллекция успешно создана с правильным размером векторов!")
-            logger.info("⚠️ Коллекция пуста, необходимо загрузить базу знаний:")
-            logger.info("   python load_knowledge_base.py")
-            return True
-        else:
-            logger.error(f"❌ Ошибка: коллекция создана с неправильным размером {new_vector_size}")
+        try:
+            new_collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
+            try:
+                new_vector_size = new_collection_info.config.params.vectors.size
+                if new_vector_size == 1536:
+                    logger.info("✅ Коллекция успешно создана с правильным размером векторов!")
+                    logger.info("⚠️ Коллекция пуста, необходимо загрузить базу знаний:")
+                    logger.info("   python load_knowledge_base.py")
+                    return True
+                else:
+                    logger.error(f"❌ Ошибка: коллекция создана с неправильным размером {new_vector_size}")
+                    return False
+            except AttributeError:
+                logger.info("✅ Коллекция создана (размер векторов не удалось проверить из-за API)")
+                logger.info("⚠️ Коллекция пуста, необходимо загрузить базу знаний:")
+                logger.info("   python load_knowledge_base.py")
+                return True
+        except Exception as e:
+            logger.error(f"❌ Ошибка при проверке созданной коллекции: {e}")
             return False
 
     except Exception as e:

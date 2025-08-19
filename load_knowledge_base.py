@@ -35,15 +35,19 @@ async def check_qdrant_connection():
         collections = embedding_service.qdrant_client.get_collections()
         logger.info(f"✅ Подключение успешно! Найдено коллекций: {len(collections.collections)}")
 
-        # Проверяем нашу коллекцию
+                # Проверяем нашу коллекцию
         collection_exists = any(
             collection.name == "laliq_knowledge_base"
             for collection in collections.collections
         )
 
         if collection_exists:
-            collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
-            logger.info(f"📊 Коллекция laliq_knowledge_base: {collection_info.points_count} точек")
+            try:
+                collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
+                logger.info(f"📊 Коллекция laliq_knowledge_base: {collection_info.points_count} точек")
+            except Exception as e:
+                logger.warning(f"⚠️ Не удалось получить детали коллекции: {e}")
+                logger.info("✅ Коллекция laliq_knowledge_base существует (детали недоступны)")
         else:
             logger.info("❌ Коллекция laliq_knowledge_base не найдена")
 
