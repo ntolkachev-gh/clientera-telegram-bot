@@ -25,7 +25,7 @@ QDRANT_CLOUD_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0
 LOCAL_QDRANT_URL = "http://localhost:6333"
 
 COLLECTION_NAME = "laliq_knowledge_base"
-VECTOR_SIZE = 3072  # Размер вектора для text-embedding-3-large
+VECTOR_SIZE = 1536  # Размер вектора для text-embedding-3-small
 
 
 def create_cloud_collection(client: QdrantClient):

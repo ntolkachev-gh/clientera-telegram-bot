@@ -45,7 +45,7 @@ class KnowledgeBaseManager:
                 self.qdrant_client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
-                        size=3072,  # Размер эмбеддингов text-embedding-3-large
+                        size=1536,  # Размер эмбеддингов text-embedding-3-small
                         distance=Distance.COSINE
                     )
                 )
@@ -490,7 +490,7 @@ class EmbeddingService:
                 self.qdrant_client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
-                        size=3072,  # Размер эмбеддингов text-embedding-3-large
+                        size=1536,  # Размер эмбеддингов text-embedding-3-small
                         distance=Distance.COSINE
                     )
                 )

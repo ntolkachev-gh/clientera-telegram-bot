@@ -17,7 +17,7 @@ b'{"status":{"error":"Not found: Collection `laliq_knowledge_base` doesn\'t exis
 - **URL:** `https://de7ffdf5-270e-466f-bb1b-fd1ca4bbdd8b.us-east4-0.gcp.cloud.qdrant.io`
 - **API Key:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.DyEayIWfHhpQMYuj0wwNMxpphMN6imYuvVldk02zIkM`
 - **Коллекция:** `laliq_knowledge_base`
-- **Размер векторов:** 3072 (text-embedding-3-large)
+- **Размер векторов:** 1536 (text-embedding-3-small)
 
 ### Проблема в коде:
 1. `EmbeddingService.search_similar()` в `bot/embedding.py` пытается выполнить поиск в несуществующей коллекции
@@ -237,7 +237,7 @@ asyncio.run(test_search())
 
 ## 🚨 Критические моменты
 
-1. **Размер векторов:** Убедиться что используется правильный размер (3072 для text-embedding-3-large)
+1. **Размер векторов:** Убедиться что используется правильный размер (1536 для text-embedding-3-small)
 2. **API ключи:** Проверить актуальность API ключа Qdrant Cloud
 3. **Переменные окружения:** Убедиться что на Heroku установлены правильные значения `QDRANT_URL` и `QDRANT_API_KEY`
 4. **Совместимость моделей:** Если меняли модель эмбеддингов, нужно пересоздать коллекцию
