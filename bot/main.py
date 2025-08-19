@@ -8,6 +8,9 @@ from bot.embedding import KnowledgeBaseManager
 from config import settings
 import nest_asyncio
 
+# Применяем nest_asyncio для решения проблем с event loop
+nest_asyncio.apply()
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -201,15 +204,26 @@ class TelegramBot:
         # Инициализация базы данных
         init_db()
 
-        # Загрузка базы знаний (асинхронная, поэтому создаём временный цикл)
+        # База знаний уже загружена в Qdrant, пропускаем повторную загрузку
+        logger.info("База знаний уже загружена в Qdrant")
+
+        # Проверяем, что коллекция существует
         try:
             kb_manager = KnowledgeBaseManager()
-            await kb_manager.load_knowledge_base()
-            logger.info("База знаний загружена")
+            collections = kb_manager.qdrant_client.get_collections()
+            collection_exists = any(
+                collection.name == kb_manager.collection_name
+                for collection in collections.collections
+            )
+            if collection_exists:
+                logger.info(f"Коллекция {kb_manager.collection_name} найдена в Qdrant")
+            else:
+                logger.warning(f"Коллекция {kb_manager.collection_name} не найдена в Qdrant")
         except Exception as e:
-            logger.error(f"Ошибка при загрузке базы знаний: {e}")
+            logger.error(f"Ошибка при проверке базы знаний: {e}")
 
-        # Запускаем polling (блокирующий, управляет собственным циклом внутри)
+                        # Запускаем polling
+        logger.info("Запуск polling...")
         await self.application.run_polling(drop_pending_updates=True)
 
 
@@ -221,9 +235,8 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-    nest_asyncio.apply()
     try:
         asyncio.run(main())
     except Exception as e:
         logger.error(f"Ошибка запуска бота: {e}")
-        raise 
+        raise

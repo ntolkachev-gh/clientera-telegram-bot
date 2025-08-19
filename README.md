@@ -1,10 +1,10 @@
 # Clientera - MVP Telegram-бот для записи клиентов
 
-Telegram-бот для салона красоты с поддержкой LLM (OpenAI GPT-4) и векторной базы знаний (Qdrant Cloud). Бот ведёт диалог, запоминает предпочтения клиента, записывает его через API Youclients, и напоминает о повторной записи.
+Telegram-бот для салона красоты с поддержкой LLM (OpenAI GPT-5) и векторной базы знаний (Qdrant Cloud). Бот ведёт диалог, запоминает предпочтения клиента, записывает его через API Youclients, и напоминает о повторной записи.
 
 ## 🚀 Функции
 
-- **Умный диалог с клиентом** - естественное общение с помощью GPT-4
+- **Умный диалог с клиентом** - естественное общение с помощью GPT-5
 - **Интеграция с Youclients** - получение услуг/мастеров и создание записей
 - **База знаний** - поиск ответов в Markdown-файлах через Qdrant
 - **Профиль клиента** - сохранение предпочтений и истории
@@ -15,7 +15,7 @@ Telegram-бот для салона красоты с поддержкой LLM (
 
 - **Python 3.11+**
 - **python-telegram-bot** - Telegram Bot API
-- **OpenAI API** - GPT-4 и text-embedding-3-small
+- **OpenAI API** - GPT-5 и text-embedding-3-small
 - **Qdrant Cloud** - векторная база знаний
 - **PostgreSQL** - основная база данных
 - **FastAPI + Jinja2** - админка
@@ -43,6 +43,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_DEFAULT_MODEL=gpt-5  # Модель по умолчанию (gpt-5, gpt-4, gpt-4-turbo)
 
 # Qdrant Cloud
 QDRANT_URL=your_qdrant_cloud_url_here
@@ -253,4 +254,4 @@ Clientera/
 
 ## 📄 Лицензия
 
-MIT License - см. файл LICENSE для деталей. 
+MIT License - см. файл LICENSE для деталей.

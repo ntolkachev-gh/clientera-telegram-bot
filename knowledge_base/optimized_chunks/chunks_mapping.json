@@ -1,0 +1,122 @@
+{
+  "optimized_chunks_info": {
+    "total_chunks": 10,
+    "description": "Оптимизированная структура базы знаний для Qdrant",
+    "optimization_results": {
+      "original_files": 13,
+      "optimized_chunks": 10,
+      "duplications_removed": [
+        "Номер телефона (был в 10 файлах)",
+        "Информация о специалистах (была в 4 файлах)",
+        "Статистика услуг (была в 2 файлах)",
+        "Описания процедур специалистов (пересечения убраны)"
+      ],
+      "consolidations_made": [
+        "Контактная информация и запись объединены",
+        "Специалисты и их услуги в одном чанке",
+        "Услуги перераспределены по логическим категориям",
+        "Ценовая информация консолидирована"
+      ]
+    }
+  },
+  "chunks": [
+    {
+      "id": "contact_booking",
+      "file": "contact_and_booking.md",
+      "title": "Контакты и запись",
+      "description": "Телефон, процесс записи, общая статистика, рекомендации",
+      "keywords": ["телефон", "запись", "администратор", "услуги", "статистика"],
+      "size_category": "medium"
+    },
+    {
+      "id": "specialists",
+      "file": "specialists_info.md",
+      "title": "Специалисты салона",
+      "description": "Команда мастеров, их специализации и ID",
+      "keywords": ["специалисты", "мастера", "Севиль", "Джамиля", "Мадина"],
+      "size_category": "medium"
+    },
+    {
+      "id": "services_manicure",
+      "file": "services_manicure.md",
+      "title": "Маникюр и уход за руками",
+      "description": "Все услуги маникюра с ценами и ID",
+      "keywords": ["маникюр", "ногти", "гель-лак", "наращивание", "spa уход"],
+      "size_category": "large"
+    },
+    {
+      "id": "services_eyebrows",
+      "file": "services_eyebrows.md",
+      "title": "Услуги для бровей",
+      "description": "Коррекция, ламинирование, окрашивание бровей",
+      "keywords": ["брови", "коррекция", "ламинирование", "ботокс", "окрашивание"],
+      "size_category": "medium"
+    },
+    {
+      "id": "services_eyelashes",
+      "file": "services_eyelashes.md",
+      "title": "Услуги для ресниц",
+      "description": "Наращивание, ламинирование ресниц всех объемов",
+      "keywords": ["ресницы", "наращивание", "ламинирование", "объем", "голливуд"],
+      "size_category": "large"
+    },
+    {
+      "id": "services_cosmetology",
+      "file": "services_cosmetology.md",
+      "title": "Косметология",
+      "description": "Пилинги, чистки, массаж лица, уходы",
+      "keywords": ["косметология", "пилинг", "чистка", "массаж", "уход"],
+      "size_category": "medium"
+    },
+    {
+      "id": "services_hair",
+      "file": "services_hair.md",
+      "title": "Парикмахерские услуги",
+      "description": "Стрижки, окрашивание, уходы, наращивание волос",
+      "keywords": ["волосы", "стрижка", "окрашивание", "наращивание", "укладка"],
+      "size_category": "large"
+    },
+    {
+      "id": "services_depilation",
+      "file": "services_depilation.md",
+      "title": "Депиляция",
+      "description": "Восковая депиляция всех зон тела",
+      "keywords": ["депиляция", "воск", "усики", "ноги", "бикини", "подмышки"],
+      "size_category": "large"
+    },
+    {
+      "id": "services_injections",
+      "file": "services_injections.md",
+      "title": "Инъекционная косметология",
+      "description": "Филлеры, мезотерапия, коррекция контуров лица",
+      "keywords": ["инъекции", "филлеры", "мезотерапия", "губы", "носогубные"],
+      "size_category": "large"
+    },
+    {
+      "id": "pricing_overview",
+      "file": "pricing_overview.md",
+      "title": "Обзор цен",
+      "description": "Ценовые категории и статистика по всем услугам",
+      "keywords": ["цены", "прайс", "стоимость", "эконом", "премиум", "люкс"],
+      "size_category": "large"
+    },
+    {
+      "id": "retail_products",
+      "file": "retail_products.md",
+      "title": "Ритейл продукты",
+      "description": "Косметика и товары для продажи в салоне",
+      "keywords": ["ритейл", "косметика", "бренды", "продукты", "уход"],
+      "size_category": "medium"
+    }
+  ],
+  "removed_files": [
+    "services_other.md - большинство услуг перераспределено по категориям"
+  ],
+  "benefits": [
+    "Устранены дублирования информации",
+    "Логическая группировка по темам",
+    "Оптимальный размер чанков для векторного поиска",
+    "Улучшена релевантность поиска",
+    "Снижена избыточность данных"
+  ]
+}

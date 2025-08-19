@@ -148,4 +148,9 @@ Thumbs.db
 *.db
 *.sqlite
 logs/
-temp/ 
+temp/
+.env.backup
+.env.production
+*.pid
+local_development/docker-data/
+to_delete/

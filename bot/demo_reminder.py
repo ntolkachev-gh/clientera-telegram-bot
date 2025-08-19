@@ -74,42 +74,22 @@ class DemoReminderSystem:
         return clients
 
     async def send_demo_reminder(self, client: Client) -> bool:
-        """Отправка демо-напоминания клиенту"""
+        """Отправка демо-напоминания клиенту без inline-кнопок"""
         try:
             # Выбираем случайное сообщение
             message_template = random.choice(self.demo_messages)
-            
             # Персонализируем сообщение
             client_name = client.first_name or "дорогой клиент"
             personalized_text = message_template["text"].replace("Привет!", f"Привет, {client_name}!")
-            
             # Добавляем призыв к действию
             call_to_action = "\n\n💬 Напишите мне, чтобы записаться на удобное время!"
-            
-            # Создаем кнопки для быстрой записи
-            keyboard = [
-                [
-                    InlineKeyboardButton("📅 Записаться", callback_data="demo_booking"),
-                    InlineKeyboardButton("💅 Услуги", callback_data="demo_services")
-                ],
-                [
-                    InlineKeyboardButton("👩‍🎨 Мастера", callback_data="demo_masters"),
-                    InlineKeyboardButton("❓ Помощь", callback_data="demo_help")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
             full_message = personalized_text + call_to_action
-            
             await self.bot.send_message(
                 chat_id=client.telegram_id,
-                text=full_message,
-                reply_markup=reply_markup
+                text=full_message
             )
-            
             logger.info(f"Демо-напоминание отправлено клиенту {client.telegram_id}")
             return True
-            
         except Exception as e:
             logger.error(f"Ошибка при отправке демо-напоминания клиенту {client.telegram_id}: {e}")
             return False

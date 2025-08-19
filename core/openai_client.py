@@ -1,0 +1,444 @@
+"""
+Core модули приложения
+"""
+import openai
+import logging
+import sys
+import json
+from typing import List, Dict, Any, Optional, Callable
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+from config import settings
+from database.models import OpenAIUsageLog, Client
+from .yclients_client import YclientsClient
+from .openai_tools import YclientsToolsDefinition, YclientsToolsHandler
+from prompts import format_prompt, PromptNames
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+# Настройка OpenAI клиента
+openai.api_key = settings.openai_api_key
+
+# Цены на токены (в долларах за 1000 токенов)
+PRICING = {
+    "gpt-5": {"input": 0.005, "output": 0.015},  # GPT-5 (предположительные цены)
+    "gpt-4": {"input": 0.03, "output": 0.06},
+    "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+    "text-embedding-3-small": {"input": 0.0002, "output": 0.0}
+}
+
+
+class OpenAIClient:
+    def __init__(self, db: Session, yclients_client: Optional[YclientsClient] = None):
+        self.db = db
+        self.client = openai.OpenAI(api_key=settings.openai_api_key)
+        self.yclients = yclients_client
+
+        # Инициализация tools если доступен yclients клиент
+        if yclients_client:
+            self.available_tools = YclientsToolsDefinition.get_tools_schema()
+            self.tools_handler = YclientsToolsHandler(yclients_client)
+            self.tool_functions = self.tools_handler.get_tool_functions()
+        else:
+            self.available_tools = []
+            self.tools_handler = None
+            self.tool_functions = {}
+
+    def _log_usage(self, client_id: Optional[int], model: str, purpose: str,
+                   prompt_tokens: int, completion_tokens: int, total_tokens: int):
+        """Логирование использования OpenAI API"""
+        cost = 0.0
+        if model in PRICING:
+            cost = (prompt_tokens * PRICING[model]["input"] +
+                   completion_tokens * PRICING[model]["output"]) / 1000
+
+        logger.info(f"💰 OpenAI использование - Модель: {model}, Цель: {purpose}, "
+                   f"Токенов: {total_tokens} (вход: {prompt_tokens}, выход: {completion_tokens}), "
+                   f"Стоимость: ${cost:.4f}")
+
+        usage_log = OpenAIUsageLog(
+            client_id=client_id,
+            model=model,
+            purpose=purpose,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            cost_usd=cost
+        )
+        self.db.add(usage_log)
+        self.db.commit()
+
+    async def chat_completion(self, messages: List[Dict[str, str]],
+                            client_id: Optional[int] = None,
+                            model: str = None) -> str:
+        """Получение ответа от GPT модели"""
+        if model is None:
+            model = settings.openai_default_model
+
+        logger.info(f"🤖 Отправка запроса в OpenAI - Модель: {model}, Клиент: {client_id}")
+        try:
+            # Параметры для разных моделей
+            if model.startswith("gpt-5"):
+                # GPT-5 не поддерживает temperature и max_tokens
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages
+                )
+            else:
+                # GPT-4 и другие модели поддерживают все параметры
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=1000,
+                    temperature=0.7
+                )
+
+            # Логирование использования
+            usage = response.usage
+            self._log_usage(
+                client_id=client_id,
+                model=model,
+                purpose="chat",
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens
+            )
+
+            response_content = response.choices[0].message.content
+            logger.info(f"✅ Получен ответ от OpenAI: {response_content[:100]}...")
+            return response_content
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при обращении к OpenAI: {e}")
+            return "Извините, произошла ошибка при обработке вашего запроса."
+
+    async def extract_facts(self, conversation_history: str,
+                          client_id: Optional[int] = None) -> Dict[str, Any]:
+        """Извлечение фактов о клиенте из истории разговора"""
+        try:
+            prompt = format_prompt(
+                PromptNames.FACT_EXTRACTION,
+                conversation_history=conversation_history
+            )
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка: не удалось загрузить промпт для извлечения фактов: {e}")
+            return {
+                "favorite_services": [],
+                "favorite_masters": [],
+                "preferred_time_slots": [],
+                "custom_notes": {
+                    "allergies": "",
+                    "preferences": "",
+                    "other": "Ошибка при анализе разговора"
+                }
+            }
+
+        try:
+            # Параметры для разных моделей
+            if settings.openai_default_model.startswith("gpt-5"):
+                response = self.client.chat.completions.create(
+                    model=settings.openai_default_model,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+            else:
+                response = self.client.chat.completions.create(
+                    model=settings.openai_default_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    temperature=0.3
+                )
+
+            # Логирование использования
+            usage = response.usage
+            self._log_usage(
+                client_id=client_id,
+                model=settings.openai_default_model,
+                purpose="fact_extraction",
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens
+            )
+
+            return json.loads(response.choices[0].message.content)
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при извлечении фактов: {e}")
+            return {}
+
+    async def create_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Создание эмбеддингов для текстов"""
+        try:
+            response = self.client.embeddings.create(
+                model="text-embedding-3-small",
+                input=texts
+            )
+
+            # Логирование использования
+            total_tokens = response.usage.total_tokens
+            self._log_usage(
+                client_id=None,
+                model="text-embedding-3-small",
+                purpose="embedding",
+                prompt_tokens=total_tokens,
+                completion_tokens=0,
+                total_tokens=total_tokens
+            )
+
+            return [embedding.embedding for embedding in response.data]
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при создании эмбеддингов: {e}")
+            return []
+
+    async def process_booking_request(self, user_message: str,
+                                    client_profile: Dict[str, Any],
+                                    available_services: Optional[List[str]] = None,
+                                    use_tools: bool = True) -> Dict[str, Any]:
+        """Обработка запроса на запись с учетом профиля клиента"""
+
+        # Если доступны tools, используем их для более точной обработки
+        if use_tools and self.yclients and self.available_tools:
+            logger.info("🔧 Используем tools для обработки запроса на запись")
+
+            try:
+                system_prompt = format_prompt(
+                    PromptNames.SALON_ASSISTANT_SYSTEM,
+                    favorite_services=client_profile.get('favorite_services', []),
+                    favorite_masters=client_profile.get('favorite_masters', []),
+                    preferred_time_slots=client_profile.get('preferred_time_slots', [])
+                )
+            except Exception as e:
+                logger.error(f"❌ Критическая ошибка: не удалось загрузить системный промпт: {e}")
+                return {
+                    "intent": "other",
+                    "confidence": 0.0,
+                    "response": "Извините, произошла техническая ошибка. Попробуйте позже.",
+                    "used_tools": False,
+                    "error": "Ошибка загрузки промпта"
+                }
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ]
+
+            try:
+                response_text = await self.chat_completion_with_tools(
+                    messages=messages,
+                    client_id=client_profile.get('id'),
+                    model=settings.openai_default_model
+                )
+
+                # Определяем intent на основе ответа
+                intent = "booking" if any(keyword in user_message.lower() for keyword in
+                    ["записаться", "запись", "хочу записаться", "записаться на", "записаться к"]) else "question"
+
+                return {
+                    "intent": intent,
+                    "confidence": 0.9,
+                    "response": response_text,
+                    "used_tools": True
+                }
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка при использовании tools: {e}")
+                # Fallback к старому методу
+                use_tools = False
+
+        # Старый метод без tools
+        logger.info("📝 Используем стандартный анализ запроса без tools")
+
+        # Добавляем список услуг, известный боту (если передан)
+        services_list_text = ", ".join(available_services) if available_services else "неизвестно"
+
+        try:
+            prompt = format_prompt(
+                PromptNames.BOOKING_ANALYSIS,
+                user_message=user_message,
+                favorite_services=client_profile.get('favorite_services', []),
+                favorite_masters=client_profile.get('favorite_masters', []),
+                preferred_time_slots=client_profile.get('preferred_time_slots', []),
+                services_list=services_list_text
+            )
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка: не удалось загрузить промпт для анализа бронирования: {e}")
+            return {
+                "intent": "other",
+                "confidence": 0.0,
+                "response": "Извините, произошла техническая ошибка. Попробуйте позже.",
+                "error": "Ошибка загрузки промпта"
+            }
+
+        try:
+            # Параметры для разных моделей
+            if settings.openai_default_model.startswith("gpt-5"):
+                response = self.client.chat.completions.create(
+                    model=settings.openai_default_model,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+            else:
+                response = self.client.chat.completions.create(
+                    model=settings.openai_default_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    temperature=0.3
+                )
+
+            # Логирование использования
+            usage = response.usage
+            self._log_usage(
+                client_id=client_profile.get('id'),
+                model=settings.openai_default_model,
+                purpose="booking_analysis",
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens
+            )
+
+            result = json.loads(response.choices[0].message.content)
+
+            # Добавляем логирование для отладки
+            logger.info(f"🔍 Анализ запроса: '{user_message}' -> intent: {result.get('intent')}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при обработке запроса на запись: {e}")
+            return {
+                "intent": "other",
+                "confidence": 0.0,
+                "response": "Извините, произошла ошибка при обработке вашего запроса."
+            }
+
+    # ============================================================================
+    # ОСНОВНОЙ МЕТОД С ПОДДЕРЖКОЙ TOOLS
+    # ============================================================================
+
+    async def chat_completion_with_tools(self, messages: List[Dict[str, str]],
+                                       client_id: Optional[int] = None,
+                                       model: str = None,
+                                       max_tool_calls: int = 5) -> str:
+        """
+        Получение ответа от GPT модели с поддержкой function calling
+
+        Args:
+            messages: список сообщений для диалога
+            client_id: ID клиента для логирования
+            model: модель OpenAI
+            max_tool_calls: максимальное количество вызовов tools
+
+        Returns:
+            Итоговый ответ модели
+        """
+        if not self.yclients or not self.available_tools:
+            logger.warning("⚠️ Tools не доступны, используем обычный chat_completion")
+            return await self.chat_completion(messages, client_id, model)
+
+        if model is None:
+            model = settings.openai_default_model
+
+        logger.info(f"🤖 Отправка запроса в OpenAI с tools - Модель: {model}, Клиент: {client_id}")
+        logger.info(f"🔧 Доступно tools: {len(self.available_tools)}")
+
+        try:
+            tool_calls_count = 0
+            current_messages = messages.copy()
+
+            while tool_calls_count < max_tool_calls:
+                # Отправляем запрос с tools
+                if model.startswith("gpt-5"):
+                    response = self.client.chat.completions.create(
+                        model=model,
+                        messages=current_messages,
+                        tools=self.available_tools,
+                        tool_choice="auto"
+                    )
+                else:
+                    response = self.client.chat.completions.create(
+                        model=model,
+                        messages=current_messages,
+                        tools=self.available_tools,
+                        tool_choice="auto",
+                        max_tokens=1000,
+                        temperature=0.7
+                    )
+
+                # Логирование использования
+                usage = response.usage
+                self._log_usage(
+                    client_id=client_id,
+                    model=model,
+                    purpose="chat_with_tools",
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=usage.completion_tokens,
+                    total_tokens=usage.total_tokens
+                )
+
+                message = response.choices[0].message
+
+                # Добавляем ответ модели к истории
+                current_messages.append({
+                    "role": "assistant",
+                    "content": message.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tool_call.id,
+                            "type": tool_call.type,
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
+                            }
+                        }
+                        for tool_call in (message.tool_calls or [])
+                    ] if message.tool_calls else None
+                })
+
+                # Если нет вызовов функций, возвращаем ответ
+                if not message.tool_calls:
+                    logger.info(f"✅ Получен финальный ответ от OpenAI: {message.content[:100]}...")
+                    return message.content or "Извините, не удалось получить ответ."
+
+                # Обрабатываем вызовы функций
+                logger.info(f"🔧 Модель запросила {len(message.tool_calls)} tool(s)")
+
+                for tool_call in message.tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+
+                    logger.info(f"📞 Вызов функции: {function_name}({function_args})")
+
+                    # Вызываем соответствующую функцию
+                    if function_name in self.tool_functions:
+                        try:
+                            tool_result = await self.tool_functions[function_name](**function_args)
+                            logger.info(f"📋 Результат {function_name}: {str(tool_result)[:200]}...")
+                        except Exception as e:
+                            logger.error(f"❌ Ошибка при вызове {function_name}: {e}")
+                            tool_result = {"error": f"Ошибка выполнения функции: {str(e)}", "success": False}
+                    else:
+                        logger.error(f"❌ Неизвестная функция: {function_name}")
+                        tool_result = {"error": f"Неизвестная функция: {function_name}", "success": False}
+
+                    # Добавляем результат функции к истории
+                    current_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(tool_result, ensure_ascii=False)
+                    })
+
+                tool_calls_count += 1
+                logger.info(f"🔄 Итерация {tool_calls_count}, продолжаем диалог...")
+
+            # Если достигли лимита вызовов
+            logger.warning(f"⚠️ Достигнут лимит вызовов tools ({max_tool_calls})")
+            return "Извините, не удалось обработать ваш запрос полностью. Попробуйте упростить вопрос."
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при обращении к OpenAI с tools: {e}")
+            return "Извините, произошла ошибка при обработке вашего запроса."

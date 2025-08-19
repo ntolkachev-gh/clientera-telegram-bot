@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from database.database import SessionLocal, init_db
 from database.models import Client, Session as ChatSession, Message
-from bot.openai_client import OpenAIClient
+from core.openai_client import OpenAIClient
 from bot.youclients_api import YouclientsAPI
 from config import settings
 from typing import Optional
@@ -90,7 +90,7 @@ class SimpleTelegramBot:
         """Получение или создание клиента"""
         with SessionLocal() as db:
             client = db.query(Client).filter(Client.telegram_id == telegram_id).first()
-            
+
             if not client:
                 client = Client(
                     telegram_id=telegram_id,
@@ -101,29 +101,29 @@ class SimpleTelegramBot:
                 db.add(client)
                 db.commit()
                 db.refresh(client)
-            
+
             return client
 
     async def process_appointment_booking(self, message_text: str, client: Client) -> Optional[str]:
         """Обработка записи на услуги и создание записи в Youclients"""
         try:
             logger.info(f"Проверяем сообщение на запись: {message_text}")
-            
+
             # Простой парсинг для определения намерения записи
             booking_keywords = ['записать', 'записаться', 'запись', 'хочу записаться', 'запиши']
             service_keywords = ['массаж', 'обертывание', 'спа', 'процедура', 'маникюр', 'педикюр']
-            
+
             is_booking = any(keyword in message_text.lower() for keyword in booking_keywords)
             has_service = any(keyword in message_text.lower() for keyword in service_keywords)
-            
+
             logger.info(f"is_booking: {is_booking}, has_service: {has_service}")
-            
+
             if is_booking and has_service:
                 logger.info("Обнаружена попытка записи, создаем запись в Youclients")
-                
+
                 # Создаем запись в Youclients
                 youclients_api = YouclientsAPI()
-                
+
                 # Определяем услугу по тексту
                 service_name = None
                 if 'массаж' in message_text.lower():
@@ -132,31 +132,31 @@ class SimpleTelegramBot:
                     service_name = 'обертывание'
                 elif 'спа' in message_text.lower():
                     service_name = 'спа-процедура'
-                
+
                 logger.info(f"Определена услуга: {service_name}")
-                
+
                 if service_name:
                     # Ищем услугу в Youclients
                     logger.info("Ищем услугу в Youclients API")
                     service = await youclients_api.find_service_by_name(service_name)
                     logger.info(f"Найдена услуга: {service}")
-                    
+
                     if service:
                         # Получаем список мастеров
                         logger.info("Получаем список мастеров")
                         masters = await youclients_api.get_masters()
                         logger.info(f"Найдено мастеров: {len(masters) if masters else 0}")
-                        
+
                         if masters:
                             # Берем первого доступного мастера
                             master = masters[0]
                             logger.info(f"Выбран мастер: {master}")
-                            
+
                             # Назначаем время на завтра в 10:00
                             tomorrow = datetime.now() + timedelta(days=1)
                             appointment_time = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0)
                             logger.info(f"Время записи: {appointment_time}")
-                            
+
                             # Создаем запись
                             client_data = {
                                 "name": f"{client.first_name or ''} {client.last_name or ''}".strip(),
@@ -164,17 +164,17 @@ class SimpleTelegramBot:
                                 "email": "",
                                 "comment": f"Запись через Telegram бота. Сообщение: {message_text}"
                             }
-                            
+
                             logger.info(f"Создаем запись с данными: {client_data}")
                             result = await youclients_api.create_appointment(
-                                client_data, 
-                                service["id"], 
-                                master["id"], 
+                                client_data,
+                                service["id"],
+                                master["id"],
                                 appointment_time
                             )
-                            
+
                             logger.info(f"Результат создания записи: {result}")
-                            
+
                             if result.get("success"):
                                 return f"✅ Отлично! Я создал запись на {service_name} на завтра в 10:00. Запись подтверждена в системе."
                             else:
@@ -183,12 +183,12 @@ class SimpleTelegramBot:
                             logger.warning("Не найдено мастеров в Youclients")
                     else:
                         logger.warning(f"Услуга '{service_name}' не найдена в Youclients")
-                
+
                 return "Я понял, что вы хотите записаться. Пожалуйста, уточните, на какую именно услугу вы хотели бы записаться?"
-            
+
             logger.info("Сообщение не является записью на услугу")
             return None
-            
+
         except Exception as e:
             logger.error(f"Ошибка при обработке записи: {e}")
             return None
@@ -277,7 +277,7 @@ class SimpleTelegramBot:
                     response = appointment_response
                 else:
                     cid = getattr(client_db, 'id', None)
-                    response = await openai_client.chat_completion(messages, int(cid) if isinstance(cid, int) else None)
+                    response = await openai_client.chat_completion_with_tools(messages, int(cid) if isinstance(cid, int) else None)
                 bot_message = Message(
                     client_id=client_db.id if hasattr(client_db, 'id') else None,
                     session_id=session.id,
@@ -299,10 +299,10 @@ class SimpleTelegramBot:
     async def run(self):
         """Запуск бота"""
         logger.info("Запуск простого Telegram бота...")
-        
+
         # Инициализация базы данных
         init_db()
-        
+
         # Запуск бота
         await self.application.run_polling(drop_pending_updates=True)
 
@@ -318,4 +318,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except Exception as e:
         logger.error(f"Ошибка запуска бота: {e}")
-        raise 
+        raise
