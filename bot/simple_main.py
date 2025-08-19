@@ -8,6 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from database.database import SessionLocal, init_db
 from database.models import Client, Session as ChatSession, Message
 from core.openai_client import OpenAIClient
+from core.yclients_client import YclientsClient
 from bot.youclients_api import YouclientsAPI
 from config import settings
 from typing import Optional
@@ -241,7 +242,10 @@ class SimpleTelegramBot:
                 )
                 db.add(user_message)
                 db.commit()
-                openai_client = OpenAIClient(db)
+
+                # Инициализация YClients клиента для tools
+                yclients_client = YclientsClient()
+                openai_client = OpenAIClient(db, yclients_client)
                 recent_messages = db.query(Message).filter(
                     Message.client_id == client_db.id
                 ).order_by(Message.created_at.desc()).limit(10).all()
