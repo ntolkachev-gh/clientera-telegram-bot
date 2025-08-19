@@ -541,6 +541,9 @@ class EmbeddingService:
     async def search_similar(self, query: str, limit: int = 5, filter_conditions: Optional[Dict] = None):
         """Поиск похожих текстов"""
         try:
+            # Автоматическая инициализация коллекции при первом обращении
+            await self._ensure_collection_exists()
+
             # Создаем эмбеддинг для запроса
             with SessionLocal() as db:
                 from core.openai_client import OpenAIClient
@@ -573,6 +576,31 @@ class EmbeddingService:
         except Exception as e:
             logger.error(f"Ошибка при поиске: {e}")
             return []
+
+    async def _ensure_collection_exists(self):
+        """Убеждаемся что коллекция существует"""
+        try:
+            collections = self.qdrant_client.get_collections()
+            collection_exists = any(
+                collection.name == self.collection_name
+                for collection in collections.collections
+            )
+
+            if not collection_exists:
+                logger.info(f"Коллекция {self.collection_name} не найдена, создаем...")
+                await self.init_collection()
+                logger.info(f"Коллекция {self.collection_name} создана (пустая)")
+                logger.warning("База знаний пуста! Необходимо загрузить данные с помощью скрипта загрузки.")
+
+        except Exception as e:
+            logger.error(f"Ошибка проверки коллекции: {e}")
+            # Попытаемся создать коллекцию в любом случае
+            try:
+                await self.init_collection()
+                logger.info("Коллекция создана принудительно")
+            except Exception as init_error:
+                logger.error(f"Не удалось создать коллекцию: {init_error}")
+                raise
 
     async def delete_points(self, point_ids: List[str]):
         """Удаление точек по ID"""

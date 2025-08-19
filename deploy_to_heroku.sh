@@ -62,6 +62,10 @@ git push heroku main
 echo "⚙️ Запуск процессов..."
 heroku ps:scale web=1 bot=1 worker=1 --app $APP_NAME
 
+# Загрузка базы знаний
+echo "📚 Загрузка базы знаний в Qdrant Cloud..."
+heroku run python load_knowledge_base.py --app $APP_NAME
+
 # Проверка статуса
 echo "📊 Проверка статуса..."
 heroku ps --app $APP_NAME
@@ -70,3 +74,6 @@ echo "✅ Деплой завершен!"
 echo "📱 Telegram бот: проверьте работу бота в Telegram"
 echo "🌐 Админ-панель: https://$APP_NAME.herokuapp.com"
 echo "📋 Логи: heroku logs --tail --app $APP_NAME"
+echo ""
+echo "🔍 Для проверки базы знаний выполните:"
+echo "heroku run python -c \"import asyncio; from bot.embedding import EmbeddingService; print('Тестируем поиск...'); service = EmbeddingService(); results = asyncio.run(service.search_similar('маникюр')); print(f'Найдено {len(results)} результатов')\" --app $APP_NAME"
