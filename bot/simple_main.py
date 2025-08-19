@@ -244,7 +244,10 @@ class SimpleTelegramBot:
                 db.commit()
 
                 # Инициализация YClients клиента для tools
-                yclients_client = YclientsClient()
+                yclients_client = YclientsClient(
+                    api_key=settings.youclients_api_key,
+                    company_id=settings.youclients_company_id
+                )
                 openai_client = OpenAIClient(db, yclients_client)
                 recent_messages = db.query(Message).filter(
                     Message.client_id == client_db.id
