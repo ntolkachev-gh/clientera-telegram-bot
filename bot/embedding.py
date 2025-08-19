@@ -50,11 +50,49 @@ class KnowledgeBaseManager:
                     )
                 )
                 print(f"Коллекция {self.collection_name} создана")
+
+                # Создаем индексы для payload полей
+                await self._create_payload_indexes()
+
             else:
                 print(f"Коллекция {self.collection_name} уже существует")
+                # Проверяем и создаем индексы если их нет
+                await self._create_payload_indexes()
 
         except Exception as e:
             print(f"Ошибка при инициализации коллекции: {e}")
+
+    async def _create_payload_indexes(self):
+        """Создание индексов для payload полей"""
+        try:
+            from qdrant_client.models import PayloadSchemaType
+
+            # Список полей для индексирования
+            index_fields = [
+                ("category", PayloadSchemaType.KEYWORD),
+                ("specialist", PayloadSchemaType.KEYWORD),
+                ("has_prices", PayloadSchemaType.BOOL),
+                ("filename", PayloadSchemaType.KEYWORD),
+                ("language", PayloadSchemaType.KEYWORD)
+            ]
+
+            for field_name, field_type in index_fields:
+                try:
+                    self.qdrant_client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name=field_name,
+                        field_schema=field_type
+                    )
+                    print(f"Создан индекс для поля {field_name}")
+                except Exception as e:
+                    # Индекс уже может существовать
+                    if "already exists" in str(e).lower():
+                        print(f"Индекс для поля {field_name} уже существует")
+                    else:
+                        print(f"Предупреждение: не удалось создать индекс для {field_name}: {e}")
+
+        except Exception as e:
+            print(f"Ошибка при создании индексов: {e}")
 
     def parse_markdown_file(self, file_path: str) -> List[Dict[str, Any]]:
         """Парсинг Markdown файла на чанки по заголовкам ##"""
@@ -495,12 +533,50 @@ class EmbeddingService:
                     )
                 )
                 logger.info(f"Коллекция {self.collection_name} создана")
+
+                # Создаем индексы для payload полей
+                await self._create_payload_indexes_service()
+
             else:
                 logger.info(f"Коллекция {self.collection_name} уже существует")
+                # Проверяем и создаем индексы если их нет
+                await self._create_payload_indexes_service()
 
         except Exception as e:
             logger.error(f"Ошибка при инициализации коллекции: {e}")
             raise
+
+    async def _create_payload_indexes_service(self):
+        """Создание индексов для payload полей в EmbeddingService"""
+        try:
+            from qdrant_client.models import PayloadSchemaType
+
+            # Список полей для индексирования
+            index_fields = [
+                ("category", PayloadSchemaType.KEYWORD),
+                ("specialist", PayloadSchemaType.KEYWORD),
+                ("has_prices", PayloadSchemaType.BOOL),
+                ("filename", PayloadSchemaType.KEYWORD),
+                ("language", PayloadSchemaType.KEYWORD)
+            ]
+
+            for field_name, field_type in index_fields:
+                try:
+                    self.qdrant_client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name=field_name,
+                        field_schema=field_type
+                    )
+                    logger.info(f"Создан индекс для поля {field_name}")
+                except Exception as e:
+                    # Индекс уже может существовать
+                    if "already exists" in str(e).lower():
+                        logger.info(f"Индекс для поля {field_name} уже существует")
+                    else:
+                        logger.warning(f"Не удалось создать индекс для {field_name}: {e}")
+
+        except Exception as e:
+            logger.error(f"Ошибка при создании индексов: {e}")
 
     async def add_text(self, text: str, metadata: Dict[str, Any]) -> str:
         """Добавление текста в векторную базу"""

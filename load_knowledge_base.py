@@ -92,7 +92,7 @@ async def load_knowledge_base():
         except Exception as e:
             logger.warning(f"⚠️ Не удалось получить детали коллекции: {e}")
             logger.info("📊 База знаний загружена (количество точек неизвестно из-за API)")
-        
+
         return True
 
     except Exception as e:
