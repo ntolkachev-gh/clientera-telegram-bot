@@ -84,11 +84,15 @@ async def load_knowledge_base():
 
         logger.info("✅ База знаний успешно загружена!")
 
-        # Проверяем результат
+                # Проверяем результат
         embedding_service = EmbeddingService()
-        collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
-        logger.info(f"📊 Загружено {collection_info.points_count} точек в коллекцию")
-
+        try:
+            collection_info = embedding_service.qdrant_client.get_collection("laliq_knowledge_base")
+            logger.info(f"📊 Загружено {collection_info.points_count} точек в коллекцию")
+        except Exception as e:
+            logger.warning(f"⚠️ Не удалось получить детали коллекции: {e}")
+            logger.info("📊 База знаний загружена (количество точек неизвестно из-за API)")
+        
         return True
 
     except Exception as e:
