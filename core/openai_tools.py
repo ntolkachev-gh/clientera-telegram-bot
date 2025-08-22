@@ -986,12 +986,35 @@ class YclientsToolsHandler:
             # Если указан конкретный мастер и одна услуга, используем новые методы
             if staff_id and len(service_ids) == 1:
                 logger.info("🆕 Используем новые методы get_available_days + get_available_times")
-                slots = await self.yclients.get_available_slots_for_staff(
-                    staff_id=staff_id,
-                    service_id=service_ids[0],
-                    date_from=date_from_dt,
-                    date_to=date_to_dt
-                )
+                try:
+                    slots = await self.yclients.get_available_slots_for_staff(
+                        staff_id=staff_id,
+                        service_id=service_ids[0],
+                        date_from=date_from_dt,
+                        date_to=date_to_dt
+                    )
+                except Exception as e:
+                    # Проверяем, является ли это ошибкой недоступности мастера
+                    if hasattr(e, 'error_code') and e.error_code == 'STAFF_UNAVAILABLE':
+                        logger.warning(f"⚠️ Мастер {staff_id} недоступен для услуги {service_ids[0]}")
+
+                        # Получаем альтернативных мастеров
+                        alternative_masters = await self._get_alternative_masters(service_ids[0])
+
+                        return {
+                            "slots": [],
+                            "total_found": 0,
+                            "success": True,
+                            "error": str(e),
+                            "error_code": "STAFF_UNAVAILABLE",
+                            "staff_id": staff_id,
+                            "service_id": service_ids[0],
+                            "suggestion": "Попробуйте выбрать другого мастера или другую услугу",
+                            "alternative_masters": alternative_masters
+                        }
+                    else:
+                        # Для других ошибок - пробрасываем дальше
+                        raise
             else:
                 logger.info("📞 Используем старый метод get_available_slots()...")
                 slots = await self.yclients.get_available_slots(
@@ -1021,6 +1044,40 @@ class YclientsToolsHandler:
             logger.error(f"❌ Ошибка в tool get_available_slots: {e}")
             logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
             return {"error": str(e), "success": False}
+
+    async def _get_alternative_masters(self, service_id: int) -> List[Dict[str, Any]]:
+        """
+        Получить список альтернативных мастеров для услуги
+
+        Args:
+            service_id: ID услуги для которой ищем мастеров
+
+        Returns:
+            Список мастеров с их данными
+        """
+        try:
+            logger.info(f"🔍 Поиск альтернативных мастеров для услуги {service_id}")
+
+            # Получаем всех мастеров из базы знаний
+            masters_result = await self.handle_get_staff()
+
+            if not masters_result.get('success', False):
+                logger.warning("⚠️ Не удалось получить список мастеров")
+                return []
+
+            all_masters = masters_result.get('staff', [])
+            logger.info(f"📋 Найдено мастеров в базе знаний: {len(all_masters)}")
+
+            # Возвращаем первых 3-5 мастеров как альтернативы
+            # TODO: В будущем можно добавить логику фильтрации по специализации
+            alternative_masters = all_masters[:5]
+
+            logger.info(f"✅ Подготовлено {len(alternative_masters)} альтернативных мастеров")
+            return alternative_masters
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при получении альтернативных мастеров: {e}")
+            return []
 
     async def handle_create_booking(self, phone: str, fullname: str, service_ids: List[int],
                                   staff_id: int, booking_datetime: str, email: Optional[str] = None,

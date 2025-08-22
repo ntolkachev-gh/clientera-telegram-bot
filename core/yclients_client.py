@@ -19,6 +19,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class StaffUnavailableError(Exception):
+    """Исключение для случая, когда мастер недоступен для услуги"""
+    def __init__(self, message: str, staff_id: int = None, service_id: int = None, error_code: str = None):
+        super().__init__(message)
+        self.staff_id = staff_id
+        self.service_id = service_id
+        self.error_code = error_code
+
+
 @dataclass
 class Service:
     """Модель услуги"""
@@ -67,7 +76,7 @@ class YclientsClient:
     def __init__(self, api_key: str, company_id: str):
         self.api_key = api_key
         self.company_id = company_id
-        self.base_url = "https://api.yclients.com/api/v1"
+        self.base_url = "https://clientera-yclients-proxy-7fb108aebb90.herokuapp.com"
 
         # Headers для реального API (без Cookie для стабильности)
         self.headers = {
@@ -101,110 +110,125 @@ class YclientsClient:
 
     async def _fetch_real_services_from_api(self) -> List[Dict[str, Any]]:
         """
-        Получить реальные услуги из YClients API через book_services endpoint (для онлайн-записи)
+        Получить реальные услуги из proxy endpoint /api/v1/services
 
         Returns:
             Список услуг из реального API
         """
         try:
-            logger.info("🔄 Запрос реальных услуг из YClients API (book_services)...")
+            logger.info("🔄 Запрос реальных услуг из proxy endpoint /api/v1/services...")
 
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # Используем правильный endpoint для онлайн-записи
-                url = f"{self.base_url}/book_services/{self.company_id}"
+                # Используем новый endpoint для получения списка услуг
+                url = f"{self.base_url}/api/v1/services"
 
-                # Добавляем Cookie для стабильности работы API
-                headers_with_cookie = self.headers.copy()
-                headers_with_cookie['Cookie'] = "app_service_group=0; spid=1754925177619_398c89debb0af0d848839820cf555f61_r3dd5ix3vm0vqwuf; spsc=1755498150556_b8a0a7cdf27891126814136e263b5b85_AlnjTXsjLDEyjpHnYgk6Z2gSmrg6CIe-UrFhWm3.qBEZ"
-
-                response = await client.get(url, headers=headers_with_cookie)
-                logger.info(f"📡 API ответ (book_services): статус {response.status_code}")
+                response = await client.get(url, headers=self.headers)
+                logger.info(f"📡 API ответ (services): статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от book_services API")
+                    logger.info(f"✅ Успешный ответ от services API")
 
-                    # YClients book_services API возвращает структуру:
-                    # {"success": true, "data": {"services": [...], "categories": [...]}, "meta": []}
+                    # Новый API возвращает структуру:
+                    # {"services": [...], "total_count": 78, "success": true}
                     services_data = []
 
-                    if isinstance(data, dict) and data.get('success') and 'data' in data:
-                        api_data = data['data']
-                        if isinstance(api_data, dict) and 'services' in api_data:
-                            services_data = api_data['services']
-                            logger.info(f"🎯 Найдено услуг в data.services: {len(services_data)}")
-                        else:
-                            logger.warning("⚠️ Неожиданная структура data в book_services")
+                    if isinstance(data, dict) and data.get('success') and 'services' in data:
+                        services_data = data['services']
+                        logger.info(f"🎯 Найдено услуг: {len(services_data)}")
+                        return services_data
                     else:
-                        logger.warning("⚠️ Неожиданная структура ответа book_services API")
+                        logger.warning("⚠️ Неожиданная структура ответа services API")
                         if isinstance(data, dict):
                             logger.info(f"Ключи ответа: {list(data.keys())}")
-
-                    # Фильтруем только активные услуги
-                    active_services = [s for s in services_data if s.get('active', 0) == 1]
-                    logger.info(f"🔍 Активных услуг: {len(active_services)} из {len(services_data)}")
-
-                    return active_services
+                        return []
 
                 else:
-                    logger.error(f"❌ Ошибка book_services API: {response.status_code} - {response.text}")
+                    logger.error(f"❌ Ошибка services API: {response.status_code} - {response.text}")
                     return []
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе к book_services API: {str(e)}")
+            logger.error(f"❌ Ошибка при запросе к services API: {str(e)}")
             return []
 
     async def _fetch_real_staff_from_api(self) -> List[Dict[str, Any]]:
         """
-        Получить реальных сотрудников из YClients API через book_staff endpoint (для онлайн-записи)
+        Получить реальных сотрудников из proxy endpoint /api/v1/staff
 
         Returns:
             Список сотрудников из реального API
         """
         try:
-            logger.info("🔄 Запрос реальных сотрудников из YClients API (book_staff)...")
+            logger.info("🔄 Запрос реальных сотрудников из proxy endpoint /api/v1/staff...")
 
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # Используем правильный endpoint для онлайн-записи
-                url = f"{self.base_url}/book_staff/{self.company_id}"
+                # Используем новый endpoint для получения списка сотрудников
+                url = f"{self.base_url}/api/v1/staff"
 
-                # Добавляем Cookie для стабильности работы API
-                headers_with_cookie = self.headers.copy()
-                headers_with_cookie['Cookie'] = "app_service_group=0; spid=1754925177619_398c89debb0af0d848839820cf555f61_r3dd5ix3vm0vqwuf; spsc=1755498150556_b8a0a7cdf27891126814136e263b5b85_AlnjTXsjLDEyjpHnYgk6Z2gSmrg6CIe-UrFhWm3.qBEZ"
-
-                response = await client.get(url, headers=headers_with_cookie)
-                logger.info(f"📡 API ответ (book_staff): статус {response.status_code}")
+                response = await client.get(url, headers=self.headers)
+                logger.info(f"📡 API ответ (staff): статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от book_staff API")
+                    logger.info(f"✅ Успешный ответ от staff API")
 
-                    staff_data = []
-
-                    if isinstance(data, dict) and data.get('success') and 'data' in data:
-                        # book_staff возвращает массив сотрудников в data
-                        if isinstance(data['data'], list):
-                            staff_data = data['data']
-                            logger.info(f"🎯 Найдено сотрудников в data: {len(staff_data)}")
-                        else:
-                            logger.warning("⚠️ Неожиданная структура data в book_staff")
+                    if isinstance(data, dict) and data.get('success') and 'staff' in data:
+                        staff_data = data['staff']
+                        logger.info(f"🎯 Найдено сотрудников: {len(staff_data)}")
+                        return staff_data
                     else:
-                        logger.warning("⚠️ Неожиданная структура ответа book_staff API")
+                        logger.warning("⚠️ Неожиданная структура ответа staff API")
                         if isinstance(data, dict):
                             logger.info(f"Ключи ответа: {list(data.keys())}")
-
-                    # Фильтруем только доступных для бронирования сотрудников
-                    bookable_staff = [s for s in staff_data if s.get('bookable', False)]
-                    logger.info(f"🔍 Доступных для записи сотрудников: {len(bookable_staff)} из {len(staff_data)}")
-
-                    return bookable_staff
+                        return []
 
                 else:
-                    logger.error(f"❌ Ошибка book_staff API: {response.status_code} - {response.text}")
+                    logger.error(f"❌ Ошибка staff API: {response.status_code} - {response.text}")
                     return []
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе сотрудников к book_staff API: {str(e)}")
+            logger.error(f"❌ Ошибка при запросе сотрудников к staff API: {str(e)}")
+            return []
+
+    async def _fetch_services_for_staff(self, staff_id: int) -> List[Dict[str, Any]]:
+        """
+        Получить услуги конкретного мастера по его ID
+
+        Args:
+            staff_id: ID мастера
+
+        Returns:
+            Список услуг, которые может выполнить данный мастер
+        """
+        try:
+            logger.info(f"🔄 Запрос услуг для мастера {staff_id} из proxy endpoint...")
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                url = f"{self.base_url}/api/v1/services/staff/{staff_id}"
+
+                response = await client.get(url, headers=self.headers)
+                logger.info(f"📡 API ответ (services/staff/{staff_id}): статус {response.status_code}")
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"✅ Успешный ответ от services/staff API для мастера {staff_id}")
+
+                    if isinstance(data, dict) and data.get('success') and 'services' in data:
+                        services_data = data['services']
+                        logger.info(f"🎯 Найдено услуг для мастера {staff_id}: {len(services_data)}")
+                        return services_data
+                    else:
+                        logger.warning(f"⚠️ Неожиданная структура ответа services/staff API для мастера {staff_id}")
+                        if isinstance(data, dict):
+                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                        return []
+
+                else:
+                    logger.error(f"❌ Ошибка services/staff API для мастера {staff_id}: {response.status_code} - {response.text}")
+                    return []
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при запросе услуг для мастера {staff_id}: {str(e)}")
             return []
 
     # ============================================================================
@@ -234,39 +258,48 @@ class YclientsClient:
             real_services_data = await self._fetch_real_services_from_api()
 
             if real_services_data:
-                # Преобразуем реальные данные API в наш формат
+                # Сначала получаем список всех мастеров для определения staff_ids
+                logger.info("🔄 Получаем список мастеров для определения staff_ids...")
+                staff_list = await self.get_staff(force_refresh=True, use_real_api=True)
+
+                # Создаем словарь для маппинга услуг к мастерам
+                service_to_staff_mapping = {}
+
+                # Для каждого мастера получаем его услуги
+                for staff in staff_list:
+                    try:
+                        staff_services = await self._fetch_services_for_staff(staff.id)
+                        for service in staff_services:
+                            service_id = service.get('id')
+                            if service_id:
+                                if service_id not in service_to_staff_mapping:
+                                    service_to_staff_mapping[service_id] = []
+                                service_to_staff_mapping[service_id].append(staff.id)
+                        logger.info(f"✅ Получено {len(staff_services)} услуг для мастера {staff.name} (ID: {staff.id})")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Ошибка при получении услуг для мастера {staff.id}: {str(e)}")
+                        continue
+
+                # Теперь преобразуем реальные данные API в наш формат
                 for i, service_data in enumerate(real_services_data):
                     try:
-                        # Адаптируем реальную структуру YClients API к нашей модели
-                        # Реальная структура: {id, title, price_min, price_max, staff, active, ...}
+                        # Адаптируем новую структуру proxy API к нашей модели
+                        # Новая структура: {id, title, price, duration, category, specialist, description}
 
                         # Получаем ID услуги
                         service_id = service_data.get('id', i + 1)
 
                         # Получаем название услуги
-                        title = (service_data.get('title') or
-                                service_data.get('booking_title') or
-                                service_data.get('name') or
-                                f'Услуга {i+1}')
+                        title = service_data.get('title', f'Услуга {i+1}')
 
-                        # Получаем цену (YClients использует price_min и price_max)
-                        price_min = service_data.get('price_min', 0)
-                        price_max = service_data.get('price_max', 0)
-                        price = float(price_min if price_min > 0 else price_max)
+                        # Получаем цену (в новом API есть поле price)
+                        price = float(service_data.get('price', 0))
 
-                        # Получаем длительность (в YClients может не быть поля duration)
-                        duration = service_data.get('duration', service_data.get('seance_length', 60))
+                        # Получаем длительность (в новом API есть поле duration)
+                        duration = service_data.get('duration', 60)
 
-                        # Получаем список сотрудников (в YClients это массив объектов staff)
-                        staff_list = service_data.get('staff', [])
-                        if isinstance(staff_list, list):
-                            # Извлекаем ID сотрудников из массива объектов
-                            staff_ids = [staff.get('id', staff) if isinstance(staff, dict) else staff for staff in staff_list]
-                            # Если список пустой, добавляем общий ID
-                            if not staff_ids:
-                                staff_ids = [1]  # Общий мастер
-                        else:
-                            staff_ids = [1]
+                        # Получаем список мастеров, которые могут выполнить эту услугу
+                        staff_ids = service_to_staff_mapping.get(service_id, [])
 
                         service = Service(
                             id=service_id,
@@ -276,13 +309,13 @@ class YclientsClient:
                             staff_ids=staff_ids
                         )
                         services.append(service)
-                        logger.info(f"✅ Добавлена услуга: {service.title} - {service.price} руб ({service.duration} мин)")
+                        logger.info(f"✅ Добавлена услуга: {service.title} - {service.price} руб ({service.duration} мин) - Мастера: {staff_ids if staff_ids else 'Любой'}")
                     except Exception as e:
                         logger.warning(f"⚠️ Ошибка при обработке услуги {i}: {str(e)}")
                         logger.warning(f"Данные услуги: {json.dumps(service_data, ensure_ascii=False, indent=2)[:300]}...")
                         continue
 
-                logger.info(f"✅ Загружено {len(services)} реальных услуг из API")
+                logger.info(f"✅ Загружено {len(services)} реальных услуг из API с маппингом мастеров")
             else:
                 logger.warning("⚠️ Не удалось получить услуги из API, используем мок данные")
                 use_real_api = False
@@ -291,49 +324,34 @@ class YclientsClient:
             # Используем мок данные как fallback
             logger.info("🔄 Загружаем список услуг из мок данных")
 
-            # МОКИРОВАННЫЕ ДАННЫЕ - в реальном проекте здесь будет HTTP запрос
+            # МОКИРОВАННЫЕ ДАННЫЕ (соответствуют формату нового API с реальными staff_ids)
             mock_services_data = [
                 {
-                    "id": 1,
-                    "title": "Стрижка женская",
+                    "id": 19444336,
+                    "title": "Мытье головы",
+                    "price": 1490,
                     "duration": 60,
-                    "price": 2500.0,
-                    "staff_ids": [1, 2, 3]
+                    "category": "Услуга",
+                    "specialist": "Мастер 4244041",
+                    "description": "Услуга из YClients"
                 },
                 {
-                    "id": 2,
-                    "title": "Окрашивание волос",
-                    "duration": 180,
-                    "price": 8000.0,
-                    "staff_ids": [2, 3]
+                    "id": 19444357,
+                    "title": "Spa-уход для волос Davines",
+                    "price": 3190,
+                    "duration": 60,
+                    "category": "Услуга",
+                    "specialist": "Мастер 4244041",
+                    "description": "Услуга из YClients"
                 },
                 {
-                    "id": 3,
-                    "title": "Маникюр",
-                    "duration": 90,
-                    "price": 3000.0,
-                    "staff_ids": [4, 5]
-                },
-                {
-                    "id": 4,
-                    "title": "Педикюр",
-                    "duration": 120,
-                    "price": 3500.0,
-                    "staff_ids": [4, 5]
-                },
-                {
-                    "id": 5,
-                    "title": "Массаж лица",
-                    "duration": 45,
-                    "price": 2000.0,
-                    "staff_ids": [6]
-                },
-                {
-                    "id": 6,
-                    "title": "Укладка",
-                    "duration": 30,
-                    "price": 1500.0,
-                    "staff_ids": [1, 2, 3]
+                    "id": 19804307,
+                    "title": "Spa-уход для волос ESTEL Ecstase",
+                    "price": 2490,
+                    "duration": 60,
+                    "category": "Услуга",
+                    "specialist": "Мастер 4244041",
+                    "description": "Услуга из YClients"
                 }
             ]
 
@@ -344,7 +362,7 @@ class YclientsClient:
                     title=service["title"],
                     duration=service["duration"],
                     price=service["price"],
-                    staff_ids=service["staff_ids"]
+                    staff_ids=[4244041]  # Мастер Джамиля (Hair-специалист)
                 )
                 for service in mock_services_data
             ]
@@ -413,43 +431,27 @@ class YclientsClient:
             # Используем мок данные как fallback
             logger.info("🔄 Загружаем список мастеров из мок данных")
 
-            # МОКИРОВАННЫЕ ДАННЫЕ
+            # МОКИРОВАННЫЕ ДАННЫЕ (соответствуют формату нового API)
             mock_staff_data = [
             {
-                "id": 1,
-                "name": "Анна Петрова",
-                "specialization": "Парикмахер-стилист",
-                "service_ids": [1, 6]  # Стрижка, Укладка
+                "id": 4244041,
+                "name": "Джамиля",
+                "specialization": "Hair-специалист"
             },
             {
-                "id": 2,
-                "name": "Мария Сидорова",
-                "specialization": "Колорист",
-                "service_ids": [1, 2, 6]  # Стрижка, Окрашивание, Укладка
+                "id": 3887919,
+                "name": "Севиль Бамматова",
+                "specialization": "Brow&wax-специалист"
             },
             {
-                "id": 3,
-                "name": "Елена Иванова",
-                "specialization": "Топ-стилист",
-                "service_ids": [1, 2, 6]  # Стрижка, Окрашивание, Укладка
+                "id": 3884784,
+                "name": "Джамиля Хункаева",
+                "specialization": "Lash-специалист"
             },
             {
-                "id": 4,
-                "name": "Ольга Козлова",
-                "specialization": "Мастер маникюра",
-                "service_ids": [3, 4]  # Маникюр, Педикюр
-            },
-            {
-                "id": 5,
-                "name": "Татьяна Морозова",
-                "specialization": "Nail-мастер",
-                "service_ids": [3, 4]  # Маникюр, Педикюр
-            },
-            {
-                "id": 6,
-                "name": "Светлана Волкова",
-                "specialization": "Косметолог",
-                "service_ids": [5]  # Массаж лица
+                "id": 3882041,
+                "name": "Мадина Багатырова",
+                "specialization": "Эстет-косметолог"
             }
             ]
 
@@ -459,7 +461,7 @@ class YclientsClient:
                     id=staff["id"],
                     name=staff["name"],
                     specialization=staff["specialization"],
-                    service_ids=staff["service_ids"]
+                    service_ids=[]  # В новом API нет информации о service_ids
                 )
                 for staff in mock_staff_data
             ]
@@ -549,7 +551,7 @@ class YclientsClient:
 
     async def get_available_times(self, staff_id: int, service_id: int, day: str) -> Dict[str, Any]:
         """
-        Получить доступные временные слоты на конкретную дату
+        Получить доступные временные слоты на конкретную дату через proxy endpoint /api/v1/booking/times
 
         Args:
             staff_id: ID сотрудника
@@ -557,7 +559,7 @@ class YclientsClient:
             day: дата в формате YYYY-MM-DD или timestamp
 
         Returns:
-            Словарь с данными о временных слотах: {'data': [{'time': '12:00', 'seance_length': 3600, 'datetime': timestamp}, ...]}
+            Словарь с данными о временных слотах: {'data': [{'time': '09:00', 'duration_seconds': 3600, 'datetime': timestamp}, ...]}
         """
         logger.info(f"🕐 Запрос доступного времени для мастера {staff_id}, услуги {service_id} на дату {day}")
 
@@ -571,33 +573,52 @@ class YclientsClient:
                 day_str = day
 
             async with httpx.AsyncClient(timeout=15.0) as client:
-                # Формируем URL согласно документации API
-                url = f"{self.base_url}/book_times/{self.company_id}/{day_str}"
+                # Используем новый proxy endpoint
+                url = f"{self.base_url}/api/v1/booking/times"
 
-                # Параметры запроса
-                params = {
+                # Формируем данные для POST запроса
+                request_data = {
                     'staff_id': staff_id,
-                    'service_id': service_id
+                    'service_id': service_id,
+                    'day': day_str
                 }
 
-                # Добавляем Cookie для стабильности работы API
-                headers_with_cookie = self.headers.copy()
-                headers_with_cookie['Cookie'] = "app_service_group=0; spid=1754925177619_398c89debb0af0d848839820cf555f61_r3dd5ix3vm0vqwuf; spsc=1755498150556_b8a0a7cdf27891126814136e263b5b85_AlnjTXsjLDEyjpHnYgk6Z2gSmrg6CIe-UrFhWm3.qBEZ"
-
-                logger.info(f"📡 Отправляем запрос: {url} с параметрами {params}")
-                response = await client.get(url, headers=headers_with_cookie, params=params)
+                logger.info(f"📡 Отправляем запрос: {url} с данными {request_data}")
+                response = await client.post(url, headers=self.headers, json=request_data)
                 logger.info(f"📡 Ответ API: статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от get_available_times API")
+                    logger.info(f"✅ Успешный ответ от booking/times API")
 
-                    if data.get('success', False):
-                        time_slots = data.get('data', [])
-                        logger.info(f"🕐 Найдено временных слотов: {len(time_slots)}")
-                        return data
+                    if isinstance(data, dict) and data.get('success') and 'slots' in data:
+                        slots_data = data['slots']
+                        total_found = data.get('total_found', 0)
+                        logger.info(f"🕐 Найдено временных слотов: {len(slots_data)} (всего: {total_found})")
+
+                        # Адаптируем новый формат к старому для обратной совместимости
+                        adapted_data = {
+                            'success': True,
+                            'data': []
+                        }
+
+                        for slot in slots_data:
+                            # Создаем объект в старом формате для совместимости
+                            adapted_slot = {
+                                'time': slot.get('time'),
+                                'duration_seconds': slot.get('duration_seconds', 3600),
+                                'datetime': slot.get('datetime'),
+                                'start_datetime': slot.get('start_datetime'),
+                                'end_datetime': slot.get('end_datetime')
+                            }
+                            adapted_data['data'].append(adapted_slot)
+
+                        logger.info(f"✅ Адаптировано {len(adapted_data['data'])} слотов к старому формату")
+                        return adapted_data
                     else:
-                        logger.error(f"❌ API вернул ошибку: {data}")
+                        logger.warning("⚠️ Неожиданная структура ответа booking/times API")
+                        if isinstance(data, dict):
+                            logger.info(f"Ключи ответа: {list(data.keys())}")
                         return {'data': []}
                 else:
                     logger.error(f"❌ Ошибка API get_available_times: {response.status_code} - {response.text}")
@@ -630,6 +651,18 @@ class YclientsClient:
         try:
             # 1. Получаем доступные дни
             booking_days = await self.get_available_days(staff_id=staff_id, service_id=service_id)
+
+            # Проверяем на ошибку недоступности мастера
+            if 'error' in booking_days and booking_days.get('error_code') == 'STAFF_UNAVAILABLE':
+                logger.warning(f"⚠️ Мастер {staff_id} недоступен для услуги {service_id}")
+                # Возвращаем специальный объект ошибки вместо пустого списка
+                raise StaffUnavailableError(
+                    f"Мастер недоступен для данной услуги",
+                    staff_id=staff_id,
+                    service_id=service_id,
+                    error_code='STAFF_UNAVAILABLE'
+                )
+
             days = booking_days['data'].get('booking_dates', [])
 
             if not days:
@@ -728,7 +761,7 @@ class YclientsClient:
                                          date_to: datetime,
                                          staff_id: Optional[int] = None) -> List[TimeSlot]:
         """
-        Получить реальные временные слоты из YClients API используя book_dates и book_times
+        Получить реальные временные слоты из proxy endpoint /api/v1/booking/slots
 
         Args:
             service_ids: список ID услуг
@@ -742,121 +775,79 @@ class YclientsClient:
         available_slots = []
 
         try:
-            logger.info("🔄 Запрос реальных слотов из YClients API (book_dates + book_times)...")
+            logger.info("🔄 Запрос реальных слотов из proxy endpoint /api/v1/booking/slots...")
 
             async with httpx.AsyncClient(timeout=15.0) as client:
-                # Добавляем Cookie для стабильности работы API
-                headers_with_cookie = self.headers.copy()
-                headers_with_cookie['Cookie'] = "app_service_group=0; spid=1754925177619_398c89debb0af0d848839820cf555f61_r3dd5ix3vm0vqwuf; spsc=1755498150556_b8a0a7cdf27891126814136e263b5b85_AlnjTXsjLDEyjpHnYgk6Z2gSmrg6CIe-UrFhWm3.qBEZ"
+                url = f"{self.base_url}/api/v1/booking/slots"
 
-                # 1. Сначала получаем доступные даты через book_dates
-                dates_url = f"{self.base_url}/book_dates/{self.company_id}"
+                # Формируем данные для POST запроса
+                request_data = {
+                    "service_ids": service_ids,
+                    "date_from": date_from.strftime('%Y-%m-%d'),
+                    "date_to": date_to.strftime('%Y-%m-%d')
+                }
 
-                # Добавляем фильтры для book_dates согласно документации
-                dates_params = {}
-                if service_ids:
-                    dates_params['service_ids'] = service_ids
                 if staff_id:
-                    dates_params['staff_id'] = staff_id
+                    request_data["staff_id"] = staff_id
 
-                dates_response = await client.get(dates_url, headers=headers_with_cookie, params=dates_params)
-                logger.info(f"📡 API ответ book_dates: статус {dates_response.status_code}")
+                logger.info(f"🔍 Запрос слотов: {url}")
+                logger.info(f"📋 Параметры: {request_data}")
 
-                if dates_response.status_code != 200:
-                    logger.error(f"❌ Ошибка получения дат: {dates_response.status_code} - {dates_response.text}")
+                response = await client.post(url, headers=self.headers, json=request_data)
+                logger.info(f"📡 API ответ: статус {response.status_code}")
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"✅ Успешный ответ от booking/slots API")
+
+                    if isinstance(data, dict) and data.get('success') and 'slots' in data:
+                        slots_data = data['slots']
+                        total_found = data.get('total_found', 0)
+                        logger.info(f"🎯 Найдено слотов: {len(slots_data)} (всего: {total_found})")
+
+                        for slot_info in slots_data:
+                            try:
+                                # Парсим данные слота
+                                start_str = slot_info.get('start')
+                                end_str = slot_info.get('end')
+                                slot_staff_id = slot_info.get('staff_id')
+                                is_available = slot_info.get('available', True)
+
+                                if start_str and end_str and is_available:
+                                    # Парсим datetime
+                                    start_datetime = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                                    end_datetime = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+
+                                    # Создаем объект TimeSlot
+                                    time_slot = TimeSlot(
+                                        start=start_datetime,
+                                        end=end_datetime,
+                                        staff_id=slot_staff_id,
+                                        available=is_available
+                                    )
+                                    available_slots.append(time_slot)
+                                    logger.info(f"✅ Добавлен слот: {start_datetime.strftime('%H:%M')} - {end_datetime.strftime('%H:%M')} для мастера {slot_staff_id}")
+
+                            except Exception as e:
+                                logger.warning(f"⚠️ Ошибка при обработке слота: {str(e)}")
+                                continue
+
+                        logger.info(f"✅ Обработано {len(available_slots)} доступных слотов")
+                        return available_slots
+                    else:
+                        logger.warning("⚠️ Неожиданная структура ответа booking/slots API")
+                        if isinstance(data, dict):
+                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                        return []
+
+                else:
+                    logger.error(f"❌ Ошибка booking/slots API: {response.status_code} - {response.text}")
                     return []
-
-                dates_data = dates_response.json()
-                if not dates_data.get('success', False):
-                    logger.error(f"❌ API вернул ошибку для дат: {dates_data}")
-                    return []
-
-                booking_dates = dates_data.get('data', {}).get('booking_dates', [])
-                logger.info(f"📅 Найдено доступных дат для записи: {len(booking_dates)}")
-
-                # Фильтруем даты по запрашиваемому диапазону
-                target_dates = []
-                for date_str in booking_dates:
-                    try:
-                        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-                        if date_from.date() <= date_obj <= date_to.date():
-                            target_dates.append(date_str)
-                    except ValueError:
-                        logger.warning(f"⚠️ Неверный формат даты: {date_str}")
-                        continue
-
-                logger.info(f"🎯 Даты в запрашиваемом диапазоне: {target_dates}")
-
-                # 2. Для каждой доступной даты получаем временные слоты через book_times
-                for date_str in target_dates:
-                    try:
-                        times_url = f"{self.base_url}/book_times/{self.company_id}/{date_str}"
-
-                        # Формируем параметры для book_times согласно документации
-                        times_params = {}
-                        if service_ids:
-                            times_params['service_ids'] = service_ids
-                        if staff_id:
-                            times_params['staff_id'] = staff_id
-
-                        logger.info(f"🔍 Запрос слотов для {date_str}: {times_url}")
-                        logger.info(f"📋 Параметры book_times: {times_params}")
-
-                        times_response = await client.get(times_url, headers=headers_with_cookie, params=times_params)
-                        logger.info(f"📡 Ответ book_times для {date_str}: статус {times_response.status_code}")
-
-                        if times_response.status_code == 200:
-                            times_data = times_response.json()
-
-                            if times_data.get('success', False) and 'data' in times_data:
-                                # Парсим временные слоты согласно документации
-                                # Структура: {"time": "17:30", "seance_length": 3600, "datetime": "2024-01-20T17:30:00"}
-                                slots_data = times_data['data']
-
-                                if isinstance(slots_data, list):
-                                    logger.info(f"✅ Получено {len(slots_data)} слотов для {date_str}")
-
-                                    for slot_info in slots_data:
-                                        try:
-                                            # Парсим datetime из API
-                                            slot_datetime_str = slot_info.get('datetime')
-                                            if slot_datetime_str:
-                                                slot_start = datetime.fromisoformat(slot_datetime_str.replace('Z', '+00:00'))
-
-                                                # Вычисляем время окончания
-                                                seance_length = slot_info.get('seance_length', 3600)  # по умолчанию 1 час
-                                                slot_end = slot_start + timedelta(seconds=seance_length)
-
-                                                # Используем ID мастера из параметров или из API
-                                                slot_staff_id = staff_id if staff_id else 4244041  # fallback ID
-
-                                                available_slots.append(TimeSlot(
-                                                    start=slot_start,
-                                                    end=slot_end,
-                                                    staff_id=slot_staff_id,
-                                                    available=True
-                                                ))
-
-                                        except Exception as e:
-                                            logger.warning(f"⚠️ Ошибка парсинга слота {slot_info}: {e}")
-                                            continue
-                                else:
-                                    logger.warning(f"⚠️ Неожиданная структура данных слотов для {date_str}: {type(slots_data)}")
-                            else:
-                                logger.warning(f"⚠️ Неуспешный ответ book_times для {date_str}: {times_data}")
-                        else:
-                            logger.warning(f"⚠️ Ошибка book_times для {date_str}: {times_response.status_code} - {times_response.text}")
-
-                    except Exception as e:
-                        logger.warning(f"⚠️ Ошибка обработки даты {date_str}: {e}")
-                        continue
-
-                logger.info(f"✅ Получено {len(available_slots)} реальных слотов из API")
-                return available_slots
 
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка при запросе к реальному API: {e}")
+            logger.error(f"❌ Ошибка при запросе слотов к booking/slots API: {str(e)}")
             return []
+
 
     async def get_available_slots(self,
                                 service_ids: List[int],
