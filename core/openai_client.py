@@ -5,6 +5,7 @@ import openai
 import logging
 import sys
 import json
+import asyncio
 from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -28,6 +29,7 @@ openai.api_key = settings.openai_api_key
 # Цены на токены (в долларах за 1000 токенов)
 PRICING = {
     "gpt-5": {"input": 0.005, "output": 0.015},  # GPT-5 (предположительные цены)
+    "gpt-4o": {"input": 0.005, "output": 0.015},
     "gpt-4": {"input": 0.03, "output": 0.06},
     "gpt-4-turbo": {"input": 0.01, "output": 0.03},
     "text-embedding-3-small": {"input": 0.0002, "output": 0.0}
@@ -91,7 +93,7 @@ class OpenAIClient:
                     messages=messages
                 )
             else:
-                # GPT-4 и другие модели поддерживают все параметры
+                # GPT-4o, GPT-4 и другие модели поддерживают все параметры
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
@@ -404,33 +406,51 @@ class OpenAIClient:
                     logger.info(f"✅ Получен финальный ответ от OpenAI: {message.content[:100]}...")
                     return message.content or "Извините, не удалось получить ответ."
 
-                # Обрабатываем вызовы функций
+                # Обрабатываем вызовы функций параллельно
                 logger.info(f"🔧 Модель запросила {len(message.tool_calls)} tool(s)")
+                logger.info("🚀 Запускаем parallel tool calling...")
 
-                for tool_call in message.tool_calls:
+                # Создаем задачи для параллельного выполнения
+                async def execute_tool_call(tool_call):
                     function_name = tool_call.function.name
                     function_args = json.loads(tool_call.function.arguments)
 
-                    logger.info(f"📞 Вызов функции: {function_name}({function_args})")
+                    logger.info(f"📞 Параллельный вызов функции: {function_name}({function_args})")
 
                     # Вызываем соответствующую функцию
                     if function_name in self.tool_functions:
                         try:
                             tool_result = await self.tool_functions[function_name](**function_args)
                             logger.info(f"📋 Результат {function_name}: {str(tool_result)[:200]}...")
+                            return tool_call.id, tool_result
                         except Exception as e:
                             logger.error(f"❌ Ошибка при вызове {function_name}: {e}")
-                            tool_result = {"error": f"Ошибка выполнения функции: {str(e)}", "success": False}
+                            return tool_call.id, {"error": f"Ошибка выполнения функции: {str(e)}", "success": False}
                     else:
                         logger.error(f"❌ Неизвестная функция: {function_name}")
-                        tool_result = {"error": f"Неизвестная функция: {function_name}", "success": False}
+                        return tool_call.id, {"error": f"Неизвестная функция: {function_name}", "success": False}
+
+                # Запускаем все tool calls параллельно
+                tasks = [execute_tool_call(tool_call) for tool_call in message.tool_calls]
+                tool_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Обрабатываем результаты
+                for i, result in enumerate(tool_results):
+                    if isinstance(result, Exception):
+                        logger.error(f"❌ Исключение при выполнении tool call: {result}")
+                        tool_call_id = message.tool_calls[i].id
+                        tool_result = {"error": f"Исключение: {str(result)}", "success": False}
+                    else:
+                        tool_call_id, tool_result = result
 
                     # Добавляем результат функции к истории
                     current_messages.append({
                         "role": "tool",
-                        "tool_call_id": tool_call.id,
+                        "tool_call_id": tool_call_id,
                         "content": json.dumps(tool_result, ensure_ascii=False)
                     })
+
+                logger.info(f"✅ Завершено параллельное выполнение {len(message.tool_calls)} tool(s)")
 
                 tool_calls_count += 1
                 logger.info(f"🔄 Итерация {tool_calls_count}, продолжаем диалог...")
