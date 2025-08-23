@@ -26,20 +26,43 @@ logger = logging.getLogger(__name__)
 # Настройка OpenAI клиента
 openai.api_key = settings.openai_api_key
 
-# Цены на токены (в долларах за 1000 токенов)
+# Настройки таймаутов для ускорения работы
+OPENAI_TIMEOUTS = {
+    "request_timeout": settings.openai_request_timeout if hasattr(settings, 'openai_request_timeout') else 30.0,
+    "read_timeout": settings.openai_request_timeout if hasattr(settings, 'openai_request_timeout') else 30.0,
+    "write_timeout": settings.openai_request_timeout if hasattr(settings, 'openai_request_timeout') else 30.0,
+    "connect_timeout": settings.openai_connect_timeout if hasattr(settings, 'openai_connect_timeout') else 10.0,
+    "pool_timeout": settings.openai_connect_timeout if hasattr(settings, 'openai_connect_timeout') else 10.0
+}
+
+# Цены на токены (в долларах за 1000 токенов) и характеристики скорости
 PRICING = {
-    "gpt-5": {"input": 0.005, "output": 0.015},  # GPT-5 (предположительные цены)
-    "gpt-4o": {"input": 0.005, "output": 0.015},
-    "gpt-4": {"input": 0.03, "output": 0.06},
-    "gpt-4-turbo": {"input": 0.01, "output": 0.03},
-    "text-embedding-3-small": {"input": 0.0002, "output": 0.0}
+    "gpt-5": {"input": 0.005, "output": 0.015, "speed": "slow", "quality": "highest"},
+    "gpt-4o": {"input": 0.005, "output": 0.015, "speed": "medium", "quality": "high"},
+    "gpt-4o-mini": {"input": 0.00015, "output": 0.0006, "speed": "fast", "quality": "good"},
+    "gpt-4": {"input": 0.03, "output": 0.06, "speed": "slow", "quality": "high"},
+    "gpt-4-turbo": {"input": 0.01, "output": 0.03, "speed": "medium", "quality": "high"},
+    "text-embedding-3-small": {"input": 0.0002, "output": 0.0, "speed": "fast", "quality": "good"}
+}
+
+# Характеристики моделей по скорости (в секундах на запрос)
+MODEL_SPEED_CHARACTERISTICS = {
+    "gpt-5": {"avg_response_time": 25.0, "recommendation": "Только для сложных задач"},
+    "gpt-4o": {"avg_response_time": 8.0, "recommendation": "Сбалансированный выбор"},
+    "gpt-4o-mini": {"avg_response_time": 3.0, "recommendation": "Рекомендуется для скорости"},
+    "gpt-4": {"avg_response_time": 15.0, "recommendation": "Устаревшая, медленная"},
+    "gpt-4-turbo": {"avg_response_time": 10.0, "recommendation": "Средняя скорость"}
 }
 
 
 class OpenAIClient:
     def __init__(self, db: Session, yclients_client: Optional[YclientsClient] = None):
         self.db = db
-        self.client = openai.OpenAI(api_key=settings.openai_api_key)
+        # Инициализация клиента с таймаутами для ускорения работы
+        self.client = openai.OpenAI(
+            api_key=settings.openai_api_key,
+            timeout=OPENAI_TIMEOUTS["request_timeout"]
+        )
         self.yclients = yclients_client
 
         # Инициализация tools если доступен yclients клиент
@@ -52,17 +75,53 @@ class OpenAIClient:
             self.tools_handler = None
             self.tool_functions = {}
 
+    def select_model_for_task(self, task_complexity: str = "medium") -> str:
+        """
+        Выбор модели в зависимости от сложности задачи
+
+        Args:
+            task_complexity: "simple", "medium", "complex"
+
+        Returns:
+            Название модели
+        """
+        if getattr(settings, 'use_fast_model_by_default', True):
+            if task_complexity == "simple":
+                return getattr(settings, 'openai_fast_model', 'gpt-4o-mini')
+            elif task_complexity == "medium":
+                return getattr(settings, 'openai_balanced_model', 'gpt-4o')
+            else:  # complex
+                return getattr(settings, 'openai_quality_model', 'gpt-5')
+        else:
+            return settings.openai_default_model
+
+    def get_model_info(self, model: str) -> dict:
+        """Получение информации о модели"""
+        if model in MODEL_SPEED_CHARACTERISTICS:
+            return {
+                "model": model,
+                "speed": MODEL_SPEED_CHARACTERISTICS[model]["speed"],
+                "avg_response_time": MODEL_SPEED_CHARACTERISTICS[model]["avg_response_time"],
+                "recommendation": MODEL_SPEED_CHARACTERISTICS[model]["recommendation"],
+                "cost_per_1k_tokens": PRICING.get(model, {}).get("input", 0)
+            }
+        return {"model": model, "speed": "unknown", "avg_response_time": 0, "recommendation": "Нет данных"}
+
     def _log_usage(self, client_id: Optional[int], model: str, purpose: str,
                    prompt_tokens: int, completion_tokens: int, total_tokens: int):
         """Логирование использования OpenAI API"""
         cost = 0.0
+        speed_info = ""
         if model in PRICING:
             cost = (prompt_tokens * PRICING[model]["input"] +
                    completion_tokens * PRICING[model]["output"]) / 1000
 
+            if model in MODEL_SPEED_CHARACTERISTICS:
+                speed_info = f" | Скорость: {MODEL_SPEED_CHARACTERISTICS[model]['speed']} ({MODEL_SPEED_CHARACTERISTICS[model]['avg_response_time']:.1f}s)"
+
         logger.info(f"💰 OpenAI использование - Модель: {model}, Цель: {purpose}, "
                    f"Токенов: {total_tokens} (вход: {prompt_tokens}, выход: {completion_tokens}), "
-                   f"Стоимость: ${cost:.4f}")
+                   f"Стоимость: ${cost:.4f}{speed_info}")
 
         usage_log = OpenAIUsageLog(
             client_id=client_id,
@@ -90,7 +149,8 @@ class OpenAIClient:
                 # GPT-5 не поддерживает temperature и max_tokens
                 response = self.client.chat.completions.create(
                     model=model,
-                    messages=messages
+                    messages=messages,
+                    timeout=OPENAI_TIMEOUTS["request_timeout"]
                 )
             else:
                 # GPT-4o, GPT-4 и другие модели поддерживают все параметры
@@ -98,7 +158,8 @@ class OpenAIClient:
                     model=model,
                     messages=messages,
                     max_tokens=1000,
-                    temperature=0.7
+                    temperature=0.7,
+                    timeout=OPENAI_TIMEOUTS["request_timeout"]
                 )
 
             # Логирование использования
@@ -178,7 +239,8 @@ class OpenAIClient:
         try:
             response = self.client.embeddings.create(
                 model="text-embedding-3-small",
-                input=texts
+                input=texts,
+                timeout=OPENAI_TIMEOUTS["request_timeout"]
             )
 
             # Логирование использования
@@ -282,14 +344,16 @@ class OpenAIClient:
             if settings.openai_default_model.startswith("gpt-5"):
                 response = self.client.chat.completions.create(
                     model=settings.openai_default_model,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=OPENAI_TIMEOUTS["request_timeout"]
                 )
             else:
                 response = self.client.chat.completions.create(
                     model=settings.openai_default_model,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=500,
-                    temperature=0.3
+                    temperature=0.3,
+                    timeout=OPENAI_TIMEOUTS["request_timeout"]
                 )
 
             # Логирование использования
@@ -325,7 +389,7 @@ class OpenAIClient:
     async def chat_completion_with_tools(self, messages: List[Dict[str, str]],
                                        client_id: Optional[int] = None,
                                        model: str = None,
-                                       max_tool_calls: int = 5) -> str:
+                                       max_tool_calls: int = None) -> str:
         """
         Получение ответа от GPT модели с поддержкой function calling
 
@@ -338,15 +402,31 @@ class OpenAIClient:
         Returns:
             Итоговый ответ модели
         """
+        start_time = datetime.now()
+        if max_tool_calls is None:
+            max_tool_calls = getattr(settings, 'openai_max_tool_calls', 3)
+
         if not self.yclients or not self.available_tools:
             logger.warning("⚠️ Tools не доступны, используем обычный chat_completion")
             return await self.chat_completion(messages, client_id, model)
 
         if model is None:
-            model = settings.openai_default_model
+            # Используем быструю модель по умолчанию для ускорения
+            if getattr(settings, 'use_fast_model_by_default', True):
+                model = getattr(settings, 'openai_fast_model', 'gpt-4o-mini')
+                logger.info(f"🚀 Используем быструю модель по умолчанию: {model}")
+            else:
+                model = settings.openai_default_model
 
         logger.info(f"🤖 Отправка запроса в OpenAI с tools - Модель: {model}, Клиент: {client_id}")
         logger.info(f"🔧 Доступно tools: {len(self.available_tools)}")
+        logger.info(f"⏱️ Максимум итераций: {max_tool_calls}")
+
+        # Логируем информацию о выбранной модели
+        model_info = self.get_model_info(model)
+        logger.info(f"📊 Модель: {model_info['model']} | Скорость: {model_info['speed']} | "
+                   f"Ожидаемое время: {model_info['avg_response_time']:.1f}s | "
+                   f"Рекомендация: {model_info['recommendation']}")
 
         try:
             tool_calls_count = 0
@@ -359,7 +439,8 @@ class OpenAIClient:
                         model=model,
                         messages=current_messages,
                         tools=self.available_tools,
-                        tool_choice="auto"
+                        tool_choice="auto",
+                        timeout=OPENAI_TIMEOUTS["request_timeout"]
                     )
                 else:
                     response = self.client.chat.completions.create(
@@ -368,7 +449,8 @@ class OpenAIClient:
                         tools=self.available_tools,
                         tool_choice="auto",
                         max_tokens=1000,
-                        temperature=0.7
+                        temperature=0.7,
+                        timeout=OPENAI_TIMEOUTS["request_timeout"]
                     )
 
                 # Логирование использования
@@ -462,3 +544,9 @@ class OpenAIClient:
         except Exception as e:
             logger.error(f"❌ Ошибка при обращении к OpenAI с tools: {e}")
             return "Извините, произошла ошибка при обработке вашего запроса."
+        finally:
+            # Логируем общее время выполнения
+            end_time = datetime.now()
+            total_time = (end_time - start_time).total_seconds()
+            logger.info(f"⏱️ Общее время выполнения: {total_time:.2f} секунд")
+            logger.info(f"📊 Модель {model} показала {'быструю' if total_time < 10 else 'среднюю' if total_time < 20 else 'медленную'} производительность")

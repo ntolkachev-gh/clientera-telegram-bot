@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str
-    openai_default_model: str = "gpt-5"  # Модель по умолчанию
+    openai_default_model: str = "gpt-4o-mini"  # Модель по умолчанию
 
     # Qdrant Cloud
     qdrant_url: str
@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     debug: bool = False
     remind_after_days: int = 21
     session_timeout_hours: int = 6
+
+    # OpenAI optimization settings
+    openai_max_tool_calls: int = 3  # Уменьшаем с 5 до 3 для ускорения
+    openai_request_timeout: float = 30.0  # Таймаут на запрос в секундах
+    openai_connect_timeout: float = 10.0  # Таймаут на подключение в секундах
+
+    # Model selection for speed optimization
+    openai_fast_model: str = "gpt-4o-mini"  # Быстрая модель для простых задач
+    openai_balanced_model: str = "gpt-4o"   # Сбалансированная модель
+    openai_quality_model: str = "gpt-5"     # Качественная, но медленная модель
+    use_fast_model_by_default: bool = True  # Использовать быструю модель по умолчанию
 
     class Config:
         env_file = ".env"
