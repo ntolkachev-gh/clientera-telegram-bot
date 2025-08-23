@@ -47,17 +47,21 @@ PRICING = {
 
 # Характеристики моделей по скорости (в секундах на запрос)
 MODEL_SPEED_CHARACTERISTICS = {
-    "gpt-5": {"avg_response_time": 25.0, "recommendation": "Только для сложных задач"},
-    "gpt-4o": {"avg_response_time": 8.0, "recommendation": "Сбалансированный выбор"},
-    "gpt-4o-mini": {"avg_response_time": 3.0, "recommendation": "Рекомендуется для скорости"},
-    "gpt-4": {"avg_response_time": 15.0, "recommendation": "Устаревшая, медленная"},
-    "gpt-4-turbo": {"avg_response_time": 10.0, "recommendation": "Средняя скорость"}
+    "gpt-5": {"speed": "slow", "avg_response_time": 25.0, "recommendation": "Только для сложных задач"},
+    "gpt-4o": {"speed": "medium", "avg_response_time": 8.0, "recommendation": "Сбалансированный выбор"},
+    "gpt-4o-mini": {"speed": "fast", "avg_response_time": 3.0, "recommendation": "Рекомендуется для скорости"},
+    "gpt-4": {"speed": "slow", "avg_response_time": 15.0, "recommendation": "Устаревшая, медленная"},
+    "gpt-4-turbo": {"speed": "medium", "avg_response_time": 10.0, "recommendation": "Средняя скорость"}
 }
 
 
 class OpenAIClient:
     def __init__(self, db: Session, yclients_client: Optional[YclientsClient] = None):
         self.db = db
+
+        # Проверяем корректность определения моделей
+        self._validate_model_definitions()
+
         # Инициализация клиента с таймаутами для ускорения работы
         self.client = openai.OpenAI(
             api_key=settings.openai_api_key,
@@ -74,6 +78,18 @@ class OpenAIClient:
             self.available_tools = []
             self.tools_handler = None
             self.tool_functions = {}
+
+    def _validate_model_definitions(self):
+        """Проверка корректности определения моделей"""
+        required_keys = ["speed", "avg_response_time", "recommendation"]
+
+        for model_name, model_data in MODEL_SPEED_CHARACTERISTICS.items():
+            missing_keys = [key for key in required_keys if key not in model_data]
+            if missing_keys:
+                logger.error(f"❌ Модель '{model_name}' не содержит ключи: {missing_keys}")
+                logger.error(f"📊 Текущие данные: {model_data}")
+            else:
+                logger.debug(f"✅ Модель '{model_name}' корректно определена")
 
     def select_model_for_task(self, task_complexity: str = "medium") -> str:
         """
@@ -97,15 +113,29 @@ class OpenAIClient:
 
     def get_model_info(self, model: str) -> dict:
         """Получение информации о модели"""
+        logger.debug(f"🔍 Получение информации о модели: {model}")
+        logger.debug(f"📊 Доступные модели: {list(MODEL_SPEED_CHARACTERISTICS.keys())}")
+
         if model in MODEL_SPEED_CHARACTERISTICS:
+            model_data = MODEL_SPEED_CHARACTERISTICS[model]
+            logger.debug(f"✅ Модель найдена: {model_data}")
             return {
                 "model": model,
-                "speed": MODEL_SPEED_CHARACTERISTICS[model]["speed"],
-                "avg_response_time": MODEL_SPEED_CHARACTERISTICS[model]["avg_response_time"],
-                "recommendation": MODEL_SPEED_CHARACTERISTICS[model]["recommendation"],
+                "speed": model_data.get("speed", "unknown"),
+                "avg_response_time": model_data.get("avg_response_time", 0),
+                "recommendation": model_data.get("recommendation", "Нет данных"),
                 "cost_per_1k_tokens": PRICING.get(model, {}).get("input", 0)
             }
-        return {"model": model, "speed": "unknown", "avg_response_time": 0, "recommendation": "Нет данных"}
+        else:
+            # Безопасная обработка для неизвестных моделей
+            logger.warning(f"⚠️ Модель '{model}' не найдена в справочнике. Доступные: {list(MODEL_SPEED_CHARACTERISTICS.keys())}")
+            return {
+                "model": model,
+                "speed": "unknown",
+                "avg_response_time": 0,
+                "recommendation": "Модель не найдена в справочнике",
+                "cost_per_1k_tokens": PRICING.get(model, {}).get("input", 0)
+            }
 
     def _log_usage(self, client_id: Optional[int], model: str, purpose: str,
                    prompt_tokens: int, completion_tokens: int, total_tokens: int):
@@ -117,7 +147,8 @@ class OpenAIClient:
                    completion_tokens * PRICING[model]["output"]) / 1000
 
             if model in MODEL_SPEED_CHARACTERISTICS:
-                speed_info = f" | Скорость: {MODEL_SPEED_CHARACTERISTICS[model]['speed']} ({MODEL_SPEED_CHARACTERISTICS[model]['avg_response_time']:.1f}s)"
+                model_data = MODEL_SPEED_CHARACTERISTICS[model]
+                speed_info = f" | Скорость: {model_data.get('speed', 'unknown')} ({model_data.get('avg_response_time', 0):.1f}s)"
 
         logger.info(f"💰 OpenAI использование - Модель: {model}, Цель: {purpose}, "
                    f"Токенов: {total_tokens} (вход: {prompt_tokens}, выход: {completion_tokens}), "
@@ -418,15 +449,32 @@ class OpenAIClient:
             else:
                 model = settings.openai_default_model
 
+        # Дополнительная проверка модели
+        logger.info(f"🔍 Проверяем модель: '{model}' (тип: {type(model)})")
+        if not isinstance(model, str):
+            logger.error(f"❌ Некорректный тип модели: {type(model)}, значение: {model}")
+            model = "gpt-4o-mini"  # Fallback к безопасной модели
+            logger.info(f"🔄 Используем fallback модель: {model}")
+
         logger.info(f"🤖 Отправка запроса в OpenAI с tools - Модель: {model}, Клиент: {client_id}")
         logger.info(f"🔧 Доступно tools: {len(self.available_tools)}")
         logger.info(f"⏱️ Максимум итераций: {max_tool_calls}")
 
         # Логируем информацию о выбранной модели
-        model_info = self.get_model_info(model)
-        logger.info(f"📊 Модель: {model_info['model']} | Скорость: {model_info['speed']} | "
-                   f"Ожидаемое время: {model_info['avg_response_time']:.1f}s | "
-                   f"Рекомендация: {model_info['recommendation']}")
+        try:
+            model_info = self.get_model_info(model)
+            logger.info(f"📊 Модель: {model_info['model']} | Скорость: {model_info['speed']} | "
+                       f"Ожидаемое время: {model_info['avg_response_time']:.1f}s | "
+                       f"Рекомендация: {model_info['recommendation']}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка при получении информации о модели '{model}': {e}")
+            # Используем безопасные значения по умолчанию
+            model_info = {
+                "model": model,
+                "speed": "unknown",
+                "avg_response_time": 0,
+                "recommendation": "Ошибка получения данных"
+            }
 
         try:
             tool_calls_count = 0
