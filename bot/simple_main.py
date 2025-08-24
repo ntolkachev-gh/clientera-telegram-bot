@@ -11,6 +11,7 @@ from core.openai_client import OpenAIClient
 from core.yclients_client import YclientsClient
 from bot.youclients_api import YouclientsAPI
 from config import settings
+from prompts import format_prompt, PromptNames
 from typing import Optional
 
 # Применяем nest_asyncio для решения проблем с event loop
@@ -252,22 +253,21 @@ class SimpleTelegramBot:
                 recent_messages = db.query(Message).filter(
                     Message.client_id == client_db.id
                 ).order_by(Message.created_at.desc()).limit(10).all()
-                # Новый системный промпт
-                system_prompt = (
-                    "Ты — дружелюбный и профессиональный ассистент салона красоты.\n\n"
-                    "Правила ответа:\n"
-                    "1. Используй эмодзи, чтобы выделять ключевые моменты (но не перегружай).\n"
-                    "2. Структурируй ответ: короткие абзацы, списки через •.\n"
-                    "3. Если предлагаешь варианты даты/времени или услуг — выводи их на отдельных строках.\n"
-                    "4. Всегда отвечай на русском.\n"
-                    "5. Если нужна дополнительная информация для записи — чётко перечисли, что ещё уточнить.\n\n"
-                    "Контекст о клиенте:\n"
-                    f"• Имя клиента: {client_db.first_name or 'Неизвестно'}\n"
-                    f"• Любимые услуги: {', '.join(getattr(client_db, 'favorite_services', []) or []) or 'нет данных'}\n"
-                    f"• Любимые мастера: {', '.join(getattr(client_db, 'favorite_masters', []) or []) or 'нет данных'}\n"
-                    f"• Предпочитаемое время: {', '.join(getattr(client_db, 'preferred_time_slots', []) or []) or 'нет данных'}\n\n"
-                    "Всегда будь приветлив и помогай клиенту оформить запись или найти информацию."
-                )
+                # Загружаем системный промпт из файла
+                try:
+                    system_prompt = format_prompt(
+                        PromptNames.SALON_RESPONSE_SYSTEM,
+                        client_name=client_db.first_name or 'Неизвестно',
+                        favorite_services=', '.join(getattr(client_db, 'favorite_services', []) or []) or 'нет данных',
+                        favorite_masters=', '.join(getattr(client_db, 'favorite_masters', []) or []) or 'нет данных',
+                        preferred_time_slots=', '.join(getattr(client_db, 'preferred_time_slots', []) or []) or 'нет данных'
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Ошибка загрузки промпта: {e}")
+                    # Fallback к простому промпту без эмодзи
+                    system_prompt = """Ты — профессиональный ассистент салона красоты.
+Отвечай коротко и по делу, без эмодзи.
+Помогай клиенту записаться или получить информацию."""
                 messages = [
                     {"role": "system", "content": system_prompt}
                 ]

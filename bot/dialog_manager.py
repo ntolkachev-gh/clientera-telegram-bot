@@ -8,6 +8,7 @@ from core.openai_client import OpenAIClient
 from bot.youclients_api import YouclientsAPI
 from bot.embedding import KnowledgeBaseManager
 from config import settings
+from prompts import format_prompt, PromptNames
 
 # Настройка логирования
 logging.basicConfig(
@@ -320,11 +321,11 @@ class DialogManager:
                     self.db.refresh(appointment)
 
                     return (
-                        f"✅ Запись создана!\n\n"
-                        f"📅 {appointment_datetime.strftime('%d.%m.%Y')}\n"
-                        f"⏰ {appointment_datetime.strftime('%H:%M')}\n"
-                        f"🎯 {service}\n"
-                        f"👩‍💼 {master}\n\n"
+                        f"Запись создана!\n\n"
+                        f"Дата: {appointment_datetime.strftime('%d.%m.%Y')}\n"
+                        f"Время: {appointment_datetime.strftime('%H:%M')}\n"
+                        f"Услуга: {service}\n"
+                        f"Мастер: {master}\n\n"
                         "Если нужно изменить или отменить запись, дайте знать."
                     )
             except Exception as e:
@@ -367,8 +368,8 @@ class DialogManager:
         for slot in available_slots[:5]:  # Показываем первые 5 слотов
             slots_text += f"• {slot['date']} в {slot['time']}\n"
 
-        slots_text += f"\n💡 Стоимость услуги: уточните в салоне\n"
-        slots_text += f"⏱ Длительность: 60-120 мин. (зависит от услуги)\n\n"
+        slots_text += f"\nСтоимость услуги: уточните в салоне\n"
+        slots_text += f"Длительность: 60-120 мин. (зависит от услуги)\n\n"
         slots_text += "Напишите желаемую дату и время для подтверждения записи."
 
         return slots_text
@@ -498,14 +499,14 @@ class DialogManager:
             self.db.commit()
             self.db.refresh(appointment)
 
-            return f"""✅ Запись успешно создана!
+            return f"""Запись успешно создана!
 
-📅 Дата: {appointment_datetime.strftime('%d.%m.%Y')}
-⏰ Время: {appointment_datetime.strftime('%H:%M')}
-🎯 Услуга: {service_name}
-👩‍💼 Мастер: {master_name}
-💰 Стоимость: уточните в салоне
-⏱ Длительность: 60 мин.
+Дата: {appointment_datetime.strftime('%d.%m.%Y')}
+Время: {appointment_datetime.strftime('%H:%M')}
+Услуга: {service_name}
+Мастер: {master_name}
+Стоимость: уточните в салоне
+Длительность: 60 мин.
 
 Запись сохранена в нашей системе. Ждем вас в салоне!
 Если нужно изменить или отменить запись, свяжитесь с нами."""
@@ -577,10 +578,25 @@ class DialogManager:
             role = "user" if msg.message_type == "user" else "assistant"
             context_messages.append({"role": role, "content": msg.content})
 
-        # Системное сообщение
+        # Загружаем системный промпт из файла
+        try:
+            system_prompt = format_prompt(
+                PromptNames.SALON_RESPONSE_SYSTEM,
+                client_name=client_profile['name'] or 'Неизвестно',
+                favorite_services=', '.join(client_profile['favorite_services']) or 'нет данных',
+                favorite_masters=', '.join(client_profile['favorite_masters']) or 'нет данных',
+                preferred_time_slots=', '.join(client_profile['preferred_time_slots']) or 'нет данных'
+            )
+        except Exception as e:
+            logger.error(f"❌ Ошибка загрузки промпта: {e}")
+            # Fallback к простому промпту без эмодзи
+            system_prompt = """Ты — профессиональный ассистент салона красоты.
+Отвечай коротко и по делу, без эмодзи.
+Помогай клиенту записаться или получить информацию."""
+
         system_message = {
             "role": "system",
-            "content": f"""Ты — дружелюбный и профессиональный ассистент салона красоты.\n\nПравила ответа:\n1. Используй эмодзи, чтобы выделять ключевые моменты (но не перегружай).\n2. Структурируй ответ: короткие абзацы, списки через •.\n3. Если предлагаешь варианты даты/времени или услуг — выводи их на отдельных строках.\n4. Всегда отвечай на русском.\n5. Если нужна дополнительная информация для записи — чётко перечисли, что ещё уточнить.\n\nКонтекст о клиенте:\n• Имя клиента: {client_profile['name'] or 'Неизвестно'}\n• Любимые услуги: {', '.join(client_profile['favorite_services']) or 'нет данных'}\n• Любимые мастера: {', '.join(client_profile['favorite_masters']) or 'нет данных'}\n• Предпочитаемое время: {', '.join(client_profile['preferred_time_slots']) or 'нет данных'}\n\nВсегда будь приветлив и помогай клиенту оформить запись или найти информацию."""
+            "content": system_prompt
         }
 
         messages = [system_message] + context_messages + [{"role": "user", "content": message_text}]

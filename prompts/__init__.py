@@ -73,7 +73,7 @@ class PromptLoader:
         template = self.load_prompt(prompt_name)
 
         # Автоматически добавляем текущую дату для системных промптов
-        if prompt_name in [PromptNames.SALON_ASSISTANT_SYSTEM, PromptNames.BOOKING_ANALYSIS, PromptNames.FACT_EXTRACTION]:
+        if prompt_name in [PromptNames.SALON_ASSISTANT_SYSTEM, PromptNames.SALON_RESPONSE_SYSTEM, PromptNames.BOOKING_ANALYSIS, PromptNames.FACT_EXTRACTION]:
             current_date = datetime.now().strftime("%Y-%m-%d")
             current_time = datetime.now().strftime("%H:%M")
             current_day = datetime.now().strftime("%A")  # День недели на английском
@@ -142,6 +142,7 @@ def format_prompt(prompt_name: str, **kwargs) -> str:
 # Константы с именами промптов для избежания опечаток
 class PromptNames:
     """Константы с именами промптов"""
-    SALON_ASSISTANT_SYSTEM = "salon_assistant_system"
+    SALON_ASSISTANT_SYSTEM = "salon_assistant_system"  # Для tools
+    SALON_RESPONSE_SYSTEM = "salon_response_system"    # Для ответов
     FACT_EXTRACTION = "fact_extraction"
     BOOKING_ANALYSIS = "booking_analysis"
