@@ -1141,12 +1141,29 @@ class YclientsToolsHandler:
                 # Получаем названия услуг из service_ids (для отображения)
                 service_names = []
                 if service_ids:
-                    # Ищем услуги в базе знаний для получения названий
-                    for service_id in service_ids:
-                        service_names.append(f"Услуга #{service_id}")
+                    # Получаем реальные названия услуг
+                    services_data = await self._get_all_services_from_qdrant()
+                    services_dict = {s.get('id'): s.get('title', f'Услуга #{s.get("id")}') for s in services_data}
 
-                # Получаем имя мастера из staff_id
+                    for service_id in service_ids:
+                        service_name = services_dict.get(service_id, f"Услуга #{service_id}")
+                        service_names.append(service_name)
+                        logger.info(f"📋 Услуга ID {service_id} -> '{service_name}'")
+
+                # Получаем реальное имя мастера из staff_id
                 staff_name = f"Мастер #{staff_id}"
+                try:
+                    # Пытаемся получить реальное имя мастера из YClients API
+                    staff_data = await self.yclients.get_staff()
+                    if staff_data and 'data' in staff_data:
+                        for staff_member in staff_data['data']:
+                            if staff_member.get('id') == staff_id:
+                                staff_name = staff_member.get('name', f"Мастер #{staff_id}")
+                                logger.info(f"👨‍💼 Мастер ID {staff_id} -> '{staff_name}'")
+                                break
+                except Exception as e:
+                    logger.warning(f"⚠️ Не удалось получить имя мастера ID {staff_id}: {e}")
+                    # Оставляем заглушку
 
                 # Создаем запись о встрече
                 # Теперь client всегда должен существовать
@@ -1155,6 +1172,8 @@ class YclientsToolsHandler:
 
                 appointment = Appointment(
                     client_id=client.id,  # Теперь client_id всегда будет заполнен
+                    service_ids=json.dumps(service_ids) if service_ids else None,  # Сохраняем ID услуг как JSON
+                    staff_id=staff_id,  # Сохраняем ID мастера
                     service_name=", ".join(service_names) if service_names else "Услуга",
                     master_name=staff_name,
                     appointment_datetime=booking_dt,
