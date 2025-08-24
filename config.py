@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     session_timeout_hours: int = 6
 
     # OpenAI optimization settings
-    openai_max_tool_calls: int = 3  # Уменьшаем с 5 до 3 для ускорения
+    openai_max_tool_calls: int = 7  # Увеличиваем до 7 для более сложных задач
     openai_request_timeout: float = 30.0  # Таймаут на запрос в секундах
     openai_connect_timeout: float = 10.0  # Таймаут на подключение в секундах
 
