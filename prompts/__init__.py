@@ -4,6 +4,7 @@
 import os
 from typing import Dict, Any
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,33 @@ class PromptLoader:
             Отформатированный промпт
         """
         template = self.load_prompt(prompt_name)
+
+        # Автоматически добавляем текущую дату для системных промптов
+        if prompt_name in [PromptNames.SALON_ASSISTANT_SYSTEM, PromptNames.BOOKING_ANALYSIS, PromptNames.FACT_EXTRACTION]:
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            current_time = datetime.now().strftime("%H:%M")
+            current_day = datetime.now().strftime("%A")  # День недели на английском
+
+            # Русские названия дней недели
+            russian_days = {
+                "Monday": "Понедельник",
+                "Tuesday": "Вторник",
+                "Wednesday": "Среда",
+                "Thursday": "Четверг",
+                "Friday": "Пятница",
+                "Saturday": "Суббота",
+                "Sunday": "Воскресенье"
+            }
+
+            current_day_ru = russian_days.get(current_day, current_day)
+
+            # Добавляем дату в kwargs если её там нет
+            if 'current_date' not in kwargs:
+                kwargs['current_date'] = current_date
+            if 'current_time' not in kwargs:
+                kwargs['current_time'] = current_time
+            if 'current_day' not in kwargs:
+                kwargs['current_day'] = current_day_ru
 
         try:
             formatted = template.format(**kwargs)
