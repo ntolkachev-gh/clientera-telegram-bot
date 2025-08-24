@@ -492,58 +492,68 @@ class YclientsClient:
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                # Формируем URL согласно документации API
-                url = f"{self.base_url}/book_dates/{self.company_id}"
+                # Используем новый proxy API для получения слотов
+                from datetime import datetime, timedelta
 
-                # Параметры запроса
-                params = {
-                    'staff_id': staff_id,
-                    'service_id': service_id
+                # Получаем слоты на ближайшие 14 дней
+                date_from = datetime.now()
+                date_to = date_from + timedelta(days=14)
+
+                # Используем новый endpoint /api/v1/booking/slots
+                url = f"{self.base_url}/api/v1/booking/slots"
+
+                # Данные для POST запроса
+                request_data = {
+                    'service_ids': [service_id],
+                    'date_from': date_from.strftime('%Y-%m-%d'),
+                    'date_to': date_to.strftime('%Y-%m-%d'),
+                    'staff_id': staff_id
                 }
 
-                # Добавляем Cookie для стабильности работы API
-                headers_with_cookie = self.headers.copy()
-                headers_with_cookie['Cookie'] = "app_service_group=0; spid=1754925177619_398c89debb0af0d848839820cf555f61_r3dd5ix3vm0vqwuf; spsc=1755498150556_b8a0a7cdf27891126814136e263b5b85_AlnjTXsjLDEyjpHnYgk6Z2gSmrg6CIe-UrFhWm3.qBEZ"
-
-                logger.info(f"📡 Отправляем запрос: {url} с параметрами {params}")
-                response = await client.get(url, headers=headers_with_cookie, params=params)
+                logger.info(f"📡 Отправляем POST запрос: {url} с данными {request_data}")
+                response = await client.post(url, headers=self.headers, json=request_data)
                 logger.info(f"📡 Ответ API: статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от get_available_days API")
+                    logger.info(f"✅ Успешный ответ от booking/slots API")
 
-                    if data.get('success', False):
-                        booking_dates = data.get('data', {}).get('booking_dates', [])
+                    if data.get('success', False) and 'slots' in data:
+                        slots = data['slots']
+
+                        # Извлекаем уникальные даты из слотов
+                        unique_dates = set()
+                        for slot in slots:
+                            if slot.get('available', True):
+                                start_str = slot.get('start')
+                                if start_str:
+                                    # Парсим дату из ISO формата
+                                    start_datetime = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                                    date_str = start_datetime.strftime('%Y-%m-%d')
+                                    unique_dates.add(date_str)
+
+                        # Конвертируем даты в timestamps для совместимости
+                        booking_dates = []
+                        for date_str in sorted(unique_dates):
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            timestamp = int(date_obj.timestamp())
+                            booking_dates.append(timestamp)
+
                         logger.info(f"📅 Найдено доступных дат: {len(booking_dates)}")
-                        return data
+                        return {
+                            'data': {'booking_dates': booking_dates},
+                            'success': True
+                        }
                     else:
                         logger.error(f"❌ API вернул ошибку: {data}")
-                        return {'data': {'booking_dates': []}, 'error': data.get('meta', {}).get('message', 'Неизвестная ошибка')}
-                elif response.status_code == 404:
-                    # Специальная обработка ошибки 404 - мастер недоступен для услуги
-                    try:
-                        error_data = response.json()
-                        error_message = error_data.get('meta', {}).get('message', 'Сотрудник недоступен для записи')
-                        logger.error(f"❌ Мастер {staff_id} недоступен для услуги {service_id}: {error_message}")
-                        return {
-                            'data': {'booking_dates': []},
-                            'error': error_message,
-                            'error_code': 'STAFF_UNAVAILABLE',
-                            'staff_id': staff_id,
-                            'service_id': service_id
-                        }
-                    except:
-                        return {
-                            'data': {'booking_dates': []},
-                            'error': 'Сотрудник недоступен для записи на выбранную услугу',
-                            'error_code': 'STAFF_UNAVAILABLE',
-                            'staff_id': staff_id,
-                            'service_id': service_id
-                        }
+                        return {'data': {'booking_dates': []}, 'error': data.get('error', 'Неизвестная ошибка')}
                 else:
-                    logger.error(f"❌ Ошибка API get_available_days: {response.status_code} - {response.text}")
-                    return {'data': {'booking_dates': []}, 'error': f'Ошибка API: {response.status_code}'}
+                    logger.error(f"❌ Ошибка booking/slots API: {response.status_code} - {response.text}")
+                    return {
+                        'data': {'booking_dates': []},
+                        'error': f'Ошибка API: {response.status_code}',
+                        'status_code': response.status_code
+                    }
 
         except Exception as e:
             logger.error(f"❌ Ошибка при запросе доступных дней: {str(e)}")
