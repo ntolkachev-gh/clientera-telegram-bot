@@ -324,14 +324,28 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        # Используем asyncio.run только если не в Heroku
-        if os.getenv('HEROKU') is None:
-            asyncio.run(main())
-        else:
-            # В Heroku используем простой запуск
+        # Определяем среду запуска
+        heroku_env = os.getenv('HEROKU') is not None or os.getenv('DYNO') is not None
+        logger.info(f"SM_MAIN: Запуск в среде: {'Heroku' if heroku_env else 'Local'}")
+
+        if heroku_env:
+            # Heroku environment - используем простой запуск без nest_asyncio
+            logger.info("SM_MAIN: Создаем новый event loop для Heroku")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(main())
+            try:
+                logger.info("SM_MAIN: Запускаем main() в Heroku loop")
+                loop.run_until_complete(main())
+            finally:
+                logger.info("SM_MAIN: Закрываем Heroku loop")
+                loop.close()
+        else:
+            # Local environment
+            logger.info("SM_MAIN: Запускаем в локальной среде")
+            asyncio.run(main())
     except Exception as e:
-        logger.error(f"SM_MAIN: Ошибка запуска бота: {e}")
+        logger.error(f"SM_MAIN: Критическая ошибка запуска бота: {e}")
+        logger.error(f"SM_MAIN: Тип ошибки: {type(e).__name__}")
+        import traceback
+        logger.error(f"SM_MAIN: Traceback: {traceback.format_exc()}")
         raise
