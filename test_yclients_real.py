@@ -120,3 +120,4 @@ if __name__ == "__main__":
     # Запускаем тест
     asyncio.run(test_yclients_real())
 
+

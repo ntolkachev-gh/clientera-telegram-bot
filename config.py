@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str
-    openai_default_model: str = "gpt-4o-mini"  # Модель по умолчанию
+    openai_default_model: str = "gpt-5-mini"  # Модель по умолчанию
 
     # Qdrant Cloud
     qdrant_url: str
@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     openai_connect_timeout: float = 10.0  # Таймаут на подключение в секундах
 
     # Model selection for speed optimization
-    openai_fast_model: str = "gpt-4o-mini"  # Быстрая модель для простых задач
+    openai_fast_model: str = "gpt-5-mini"  # Быстрая модель для простых задач
     openai_balanced_model: str = "gpt-4o"   # Сбалансированная модель
-    openai_quality_model: str = "gpt-5"     # Качественная, но медленная модель
+    openai_quality_model: str = "gpt-5-mini"     # Качественная и быстрая модель
     use_fast_model_by_default: bool = True  # Использовать быструю модель по умолчанию
 
     class Config:

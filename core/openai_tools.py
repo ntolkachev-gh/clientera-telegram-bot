@@ -24,16 +24,16 @@ class YclientsToolsDefinition:
         Returns:
             Список схем функций в формате OpenAI
         """
-        logger.info("🔧 Формирование схем tools для OpenAI Function Calling")
-        logger.info("📋 Создаем схемы для следующих tools:")
-        logger.info("   • get_services - получение списка услуг")
-        logger.info("   • get_staff - получение списка мастеров")
-        logger.info("   • find_service_by_name - поиск услуги по названию")
-        logger.info("   • find_staff_by_name - поиск мастера по имени")
-        logger.info("   • get_available_slots - получение свободных слотов")
-        logger.info("   • get_available_days - получение доступных дней")
-        logger.info("   • get_available_times - получение временных слотов")
-        logger.info("   • create_booking - создание записи")
+        logger.info("YTD_GTS: Формирование схем tools для OpenAI Function Calling")
+        logger.info("YTD_GTS: Создаем схемы для следующих tools:")
+        logger.info("YTD_GTS:   get_services - получение списка услуг")
+        logger.info("YTD_GTS:   get_staff - получение списка мастеров")
+        logger.info("YTD_GTS:   find_service_by_name - поиск услуги по названию")
+        logger.info("YTD_GTS:   find_staff_by_name - поиск мастера по имени")
+        logger.info("YTD_GTS:   get_available_slots - получение свободных слотов")
+        logger.info("YTD_GTS:   get_available_days - получение доступных дней")
+        logger.info("YTD_GTS:   get_available_times - получение временных слотов")
+        logger.info("YTD_GTS:   create_booking - создание записи")
 
         tools = [
             YclientsToolsDefinition._get_services_tool(),
@@ -46,8 +46,9 @@ class YclientsToolsDefinition:
             YclientsToolsDefinition._create_booking_tool()
         ]
 
-        logger.info(f"✅ Успешно создано {len(tools)} схем tools для OpenAI")
-        logger.info("🔧 Tools готовы к использованию в OpenAI Function Calling")
+        logger.info(f"YTD_GTS: Успешно создано {len(tools)} схем tools для OpenAI")
+        logger.info("YTD_GTS: Tools готовы к использованию в OpenAI Function Calling")
+        logger.info(f"YTD_GTS: Полный список созданных tools: {[tool['function']['name'] for tool in tools]}")
         return tools
 
     @staticmethod
@@ -276,9 +277,10 @@ class YclientsToolsHandler:
         self.yclients = yclients_client
         self.telegram_id = telegram_id
         self.embedding_service = EmbeddingService()
-        logger.info("🛠️ Инициализирован YclientsToolsHandler")
-        logger.info(f"📋 YclientsClient: {type(yclients_client).__name__}")
-        logger.info("🔧 Готов к обработке вызовов tools")
+        logger.info("YTH_INIT: Инициализирован YclientsToolsHandler")
+        logger.info(f"YTH_INIT: YclientsClient: {type(yclients_client).__name__}")
+        logger.info(f"YTH_INIT: Telegram ID: {telegram_id}")
+        logger.info("YTH_INIT: Готов к обработке вызовов tools")
 
     def get_tool_functions(self) -> Dict[str, callable]:
         """
@@ -287,7 +289,7 @@ class YclientsToolsHandler:
         Returns:
             Словарь с именами функций и их обработчиками
         """
-        logger.info("🔧 Получение маппинга функций для tools")
+        logger.info("YTH_GTF: Получение маппинга функций для tools")
         tool_functions = {
             "get_services": self.handle_get_services,
             "get_staff": self.handle_get_staff,
@@ -298,8 +300,8 @@ class YclientsToolsHandler:
             "get_available_times": self.handle_get_available_times,
             "create_booking": self.handle_create_booking
         }
-        logger.info(f"✅ Зарегистрировано {len(tool_functions)} функций для tools")
-        logger.info(f"📋 Доступные функции: {list(tool_functions.keys())}")
+        logger.info(f"YTH_GTF: Зарегистрировано {len(tool_functions)} функций для tools")
+        logger.info(f"YTH_GTF: Доступные функции: {list(tool_functions.keys())}")
         return tool_functions
 
     # ============================================================================
@@ -308,20 +310,22 @@ class YclientsToolsHandler:
 
     async def handle_get_services(self, **kwargs) -> Dict[str, Any]:
         """Tool handler: получить полный список услуг из базы знаний Qdrant"""
-        logger.info("🛠️ Обработка tool: get_services")
-        logger.info(f"📋 Параметры вызова: {kwargs}")
+        logger.info("YTH_HGS: Обработка tool: get_services")
+        logger.info(f"YTH_HGS: Параметры вызова: {kwargs}")
+        logger.info(f"YTH_HGS: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
-            logger.info("🔍 Получение всех услуг из Qdrant...")
+            logger.info("YTH_HGS: Получение всех услуг из Qdrant...")
 
             # Получаем все точки с категорией "services" из Qdrant
             services = await self._get_all_services_from_qdrant()
 
-            logger.info(f"📥 Найдено {len(services)} услуг в базе знаний")
-            logger.info(f"✅ Tool get_services: успешно обработано {len(services)} услуг")
+            logger.info(f"YTH_HGS: Найдено {len(services)} услуг в базе знаний")
+            logger.info(f"YTH_HGS: Успешно обработано {len(services)} услуг")
 
             if services:
-                logger.info(f"📊 Первые 3 услуги: {services[:3]}")
+                logger.info(f"YTH_HGS: Первые 3 услуги: {services[:3]}")
+                logger.info(f"YTH_HGS: Полный список названий услуг: {[s.get('title', 'Unknown') for s in services]}")
 
             return {
                 "services": services,
@@ -330,27 +334,39 @@ class YclientsToolsHandler:
             }
 
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool get_services: {e}")
-            logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HGS: Ошибка в tool get_services: {e}")
+            logger.error(f"YTH_HGS: Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HGS: Полная информация об ошибке: {str(e)}", exc_info=True)
             return {"error": str(e), "success": False}
 
     async def _get_all_services_from_qdrant(self) -> List[Dict[str, Any]]:
         """Получить все услуги из Qdrant, используя scroll для получения всех записей"""
         try:
+            logger.info("YTH_GASQ: Начало получения всех услуг из Qdrant")
             # Используем scroll для получения всех точек с категорией services
-            scroll_result = self.embedding_service.qdrant_client.scroll(
-                collection_name=self.embedding_service.collection_name,
-                scroll_filter={
+            scroll_request = {
+                "collection_name": self.embedding_service.collection_name,
+                "scroll_filter": {
                     "must": [
                         {"key": "category", "match": {"value": "services"}}
                     ]
                 },
-                limit=1000,  # Максимальное количество за один запрос
-                with_payload=True,
-                with_vectors=False  # Векторы нам не нужны для экономии трафика
+                "limit": 1000,
+                "with_payload": True,
+                "with_vectors": False
+            }
+            logger.info(f"YTH_GASQ: Параметры запроса scroll: {json.dumps(scroll_request, ensure_ascii=False, indent=2)}")
+
+            scroll_result = self.embedding_service.qdrant_client.scroll(
+                collection_name=scroll_request["collection_name"],
+                scroll_filter=scroll_request["scroll_filter"],
+                limit=scroll_request["limit"],
+                with_payload=scroll_request["with_payload"],
+                with_vectors=scroll_request["with_vectors"]
             )
 
             points = scroll_result[0]  # Список точек
+            logger.info(f"YTH_GASQ: Получено {len(points)} точек из Qdrant")
             services = []
 
             for point in points:
@@ -383,7 +399,8 @@ class YclientsToolsHandler:
             return list(unique_services.values())
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при получении услуг из Qdrant: {e}")
+            logger.error(f"YTH_GASQ: Ошибка при получении услуг из Qdrant: {e}")
+            logger.error(f"YTH_GASQ: Полная информация об ошибке: {str(e)}", exc_info=True)
             raise
 
     def _parse_services_from_content(self, content: str, category: str,
@@ -643,11 +660,12 @@ class YclientsToolsHandler:
 
     async def handle_get_staff(self, **kwargs) -> Dict[str, Any]:
         """Tool handler: получить список мастеров из базы знаний Qdrant"""
-        logger.info("🛠️ Обработка tool: get_staff")
-        logger.info(f"📋 Параметры вызова: {kwargs}")
+        logger.info("YTH_HGT: Обработка tool: get_staff")
+        logger.info(f"YTH_HGT: Параметры вызова: {kwargs}")
+        logger.info(f"YTH_HGT: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
-            logger.info("🔍 Поиск мастеров в базе знаний Qdrant...")
+            logger.info("YTH_HGT: Поиск мастеров в базе знаний Qdrant...")
 
             # Получаем точки с категорией "specialists" напрямую из Qdrant без embeddings
             try:
@@ -663,9 +681,10 @@ class YclientsToolsHandler:
                     with_vectors=False
                 )
                 search_results = scroll_result[0]
-                logger.info(f"📥 Найдено {len(search_results)} точек с категорией specialists")
+                logger.info(f"YTH_HGT: Найдено {len(search_results)} точек с категорией specialists")
             except Exception as e:
-                logger.warning(f"⚠️ Ошибка при поиске по категории, пробуем семантический поиск: {e}")
+                logger.warning(f"YTH_HGT: Ошибка при поиске по категории, пробуем семантический поиск: {e}")
+                logger.warning(f"YTH_HGT: Полная информация об ошибке: {str(e)}", exc_info=True)
                 # Fallback на семантический поиск если не работает фильтр
                 search_results = await self.embedding_service.search_similar(
                     query="Севиль Бамматова Джамиля Хункаева Мадина Багатырова специалисты команда мастера",
@@ -683,7 +702,7 @@ class YclientsToolsHandler:
                 text_to_parse = content if content else full_text
 
                 if not text_to_parse:
-                    logger.warning("Пустой контент в результате поиска")
+                    logger.warning("YTH_HGT: Пустой контент в результате поиска")
                     continue
 
                 # Парсим мастеров из контента
@@ -730,40 +749,44 @@ class YclientsToolsHandler:
                                     "specialization": specialization
                                 })
 
-            logger.info(f"📥 Найдено {len(staff_list)} мастеров в базе знаний")
-            logger.info(f"✅ Tool get_staff: успешно обработано {len(staff_list)} мастеров")
-            logger.info(f"📊 Первые 3 мастера: {staff_list[:3] if len(staff_list) > 3 else staff_list}")
+            logger.info(f"YTH_HGT: Найдено {len(staff_list)} мастеров в базе знаний")
+            logger.info(f"YTH_HGT: Успешно обработано {len(staff_list)} мастеров")
+            logger.info(f"YTH_HGT: Первые 3 мастера: {staff_list[:3] if len(staff_list) > 3 else staff_list}")
+            logger.info(f"YTH_HGT: Полный список сотрудников: {json.dumps(staff_list, ensure_ascii=False, indent=2)}")
 
             return {"staff": staff_list, "success": True}
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool get_staff: {e}")
-            logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HGT: Ошибка в tool get_staff: {e}")
+            logger.error(f"YTH_HGT: Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HGT: Полная информация об ошибке: {str(e)}", exc_info=True)
             return {"error": str(e), "success": False}
 
     async def handle_find_service_by_name(self, service_name: str, **kwargs) -> Dict[str, Any]:
         """Tool handler: найти услугу по названию в базе знаний Qdrant"""
-        logger.info(f"🛠️ Обработка tool: find_service_by_name('{service_name}')")
-        logger.info(f"📋 Параметры вызова: service_name='{service_name}', kwargs={kwargs}")
+        logger.info(f"YTH_HFSBN: Обработка tool: find_service_by_name('{service_name}')")
+        logger.info(f"YTH_HFSBN: Параметры вызова: service_name='{service_name}', kwargs={kwargs}")
+        logger.info(f"YTH_HFSBN: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
-            logger.info(f"🔍 Ищем услугу '{service_name}' в базе знаний Qdrant...")
+            logger.info(f"YTH_HFSBN: Ищем услугу '{service_name}' в базе знаний Qdrant...")
 
             # Сначала используем семантический поиск через embeddings
             search_results = []
 
             try:
-                logger.info(f"🧠 Выполняем семантический поиск для '{service_name}'...")
+                logger.info(f"YTH_HFSBN: Выполняем семантический поиск для '{service_name}'...")
                 search_results = await self.embedding_service.search_similar(
                     query=f"услуга {service_name} цена стоимость длительность",
                     limit=10
                 )
-                logger.info(f"📥 Найдено {len(search_results)} результатов через семантический поиск")
+                logger.info(f"YTH_HFSBN: Найдено {len(search_results)} результатов через семантический поиск")
             except Exception as e:
-                logger.warning(f"⚠️ Ошибка при семантическом поиске: {e}")
+                logger.warning(f"YTH_HFSBN: Ошибка при семантическом поиске: {e}")
+                logger.warning(f"YTH_HFSBN: Полная информация об ошибке: {str(e)}", exc_info=True)
 
             # Если семантический поиск не дал результатов, используем fallback через scroll
             if not search_results:
-                logger.info("🔄 Семантический поиск не дал результатов, пробуем поиск через scroll...")
+                logger.info("YTH_HFSBN:  Семантический поиск не дал результатов, пробуем поиск через scroll...")
                 service_categories = ["services", "pricing", "cosmetology", "hair", "manicure", "eyebrows", "eyelashes", "depilation", "injections", "other"]
 
                 try:
@@ -795,9 +818,9 @@ class YclientsToolsHandler:
                         if len(search_results) >= 5:
                             break
 
-                    logger.info(f"📥 Найдено {len(search_results)} результатов через scroll")
+                    logger.info(f"YTH_HFSBN:  Найдено {len(search_results)} результатов через scroll")
                 except Exception as e:
-                    logger.warning(f"⚠️ Ошибка при поиске через scroll: {e}")
+                    logger.warning(f"YTH_HFSBN:  Ошибка при поиске через scroll: {e}")
                     search_results = []
 
             best_match = None
@@ -807,7 +830,7 @@ class YclientsToolsHandler:
                 content = result.payload.get("content", "")
                 score = result.score
 
-                logger.info(f"🔍 Анализируем результат со score {score:.3f}")
+                logger.info(f"YTH_HFSBN:  Анализируем результат со score {score:.3f}")
 
                 # Улучшенный поиск услуги в контенте - ищем как точное совпадение, так и частичное
                 service_found = False
@@ -825,13 +848,13 @@ class YclientsToolsHandler:
                         service_found = True
 
                 if service_found:
-                    logger.info(f"✅ Услуга найдена в контенте")
+                    logger.info(f"YTH_HFSBN:  Услуга найдена в контенте")
 
                     # Улучшенный поиск цены и длительности
                     parsed_service = self._parse_service_from_content(content, service_name)
 
                     if parsed_service and parsed_service.get("price", 0) > 0:
-                        logger.info(f"💰 Найдена цена: {parsed_service['price']} ₽")
+                        logger.info(f"YTH_HFSBN:  Найдена цена: {parsed_service['price']} ₽")
                         best_match = {
                             "id": hash(service_name) % 10000,
                             "title": parsed_service["title"],
@@ -858,29 +881,30 @@ class YclientsToolsHandler:
                         best_score = score
 
             if best_match:
-                logger.info(f"✅ Tool find_service_by_name: найдена услуга '{best_match['title']}'")
-                logger.info(f"📊 Детали услуги: {best_match}")
+                logger.info(f"YTH_HFSBN:  Tool find_service_by_name: найдена услуга '{best_match['title']}'")
+                logger.info(f"YTH_HFSBN:  Детали услуги: {best_match}")
                 return {"service": best_match, "found": True, "success": True}
             else:
-                logger.info(f"⚠️ Tool find_service_by_name: услуга '{service_name}' не найдена")
+                logger.info(f"YTH_HFSBN:  Tool find_service_by_name: услуга '{service_name}' не найдена")
                 return {"service": None, "found": False, "success": True}
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool find_service_by_name: {e}")
-            logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HFSBN:  Ошибка в tool find_service_by_name: {e}")
+            logger.error(f"YTH_HFSBN:  Тип ошибки: {type(e).__name__}")
             return {"error": str(e), "success": False}
 
     async def handle_find_staff_by_name(self, staff_name: str, **kwargs) -> Dict[str, Any]:
         """Tool handler: найти мастера по имени в базе знаний Qdrant"""
-        logger.info(f"🛠️ Обработка tool: find_staff_by_name('{staff_name}')")
-        logger.info(f"📋 Параметры вызова: staff_name='{staff_name}', kwargs={kwargs}")
+        logger.info(f"YTH_HFSN: Обработка tool: find_staff_by_name('{staff_name}')")
+        logger.info(f"YTH_HFSN: Параметры вызова: staff_name='{staff_name}', kwargs={kwargs}")
+        logger.info(f"YTH_HFSN: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         # Проверяем на пустое имя
         if not staff_name or not staff_name.strip():
-            logger.info("📭 Пустое имя мастера, возвращаем пустой результат")
+            logger.info("YTH_HFSN:  Пустое имя мастера, возвращаем пустой результат")
             return {"staff": None, "found": False, "success": True}
 
         try:
-            logger.info(f"🔍 Ищем мастера '{staff_name}' в базе знаний Qdrant...")
+            logger.info(f"YTH_HFSN:  Ищем мастера '{staff_name}' в базе знаний Qdrant...")
 
             # Сначала пробуем найти без embeddings через scroll с фильтром по категории specialists
             search_results = []
@@ -912,9 +936,9 @@ class YclientsToolsHandler:
                         if len(search_results) >= 5:
                             break
 
-                logger.info(f"📥 Найдено {len(search_results)} результатов без embeddings")
+                logger.info(f"YTH_HFSN:  Найдено {len(search_results)} результатов без embeddings")
             except Exception as e:
-                logger.warning(f"⚠️ Ошибка при поиске без embeddings, пробуем семантический поиск: {e}")
+                logger.warning(f"YTH_HFSN:  Ошибка при поиске без embeddings, пробуем семантический поиск: {e}")
                 # Fallback на семантический поиск
                 search_results = await self.embedding_service.search_similar(
                     query=f"мастер {staff_name} специализация услуги",
@@ -957,35 +981,36 @@ class YclientsToolsHandler:
                         best_score = score
 
             if best_match:
-                logger.info(f"✅ Tool find_staff_by_name: найден мастер '{best_match['name']}'")
-                logger.info(f"📊 Детали мастера: {best_match}")
+                logger.info(f"YTH_HFSN:  Tool find_staff_by_name: найден мастер '{best_match['name']}'")
+                logger.info(f"YTH_HFSN:  Детали мастера: {best_match}")
                 return {"staff": best_match, "found": True, "success": True}
             else:
-                logger.info(f"⚠️ Tool find_staff_by_name: мастер '{staff_name}' не найден")
+                logger.info(f"YTH_HFSN:  Tool find_staff_by_name: мастер '{staff_name}' не найден")
                 return {"staff": None, "found": False, "success": True}
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool find_staff_by_name: {e}")
-            logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HFSN:  Ошибка в tool find_staff_by_name: {e}")
+            logger.error(f"YTH_HFSN:  Тип ошибки: {type(e).__name__}")
             return {"error": str(e), "success": False}
 
     async def handle_get_available_slots(self, service_ids: List[int], date_from: str,
                                        date_to: str, staff_id: Optional[int] = None, **kwargs) -> Dict[str, Any]:
         """Tool handler: получить свободные слоты"""
-        logger.info(f"🛠️ Обработка tool: get_available_slots(services={service_ids}, "
+        logger.info(f"YTH_HGAS: Обработка tool: get_available_slots(services={service_ids}, "
                    f"from={date_from}, to={date_to}, staff={staff_id})")
-        logger.info(f"📋 Параметры вызова: service_ids={service_ids}, date_from='{date_from}', "
+        logger.info(f"YTH_HGAS: Параметры вызова: service_ids={service_ids}, date_from='{date_from}', "
                    f"date_to='{date_to}', staff_id={staff_id}, kwargs={kwargs}")
+        logger.info(f"YTH_HGAS: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
             # Парсим даты
-            logger.info("📅 Парсим даты...")
+            logger.info("YTH_HGAS:  Парсим даты...")
             date_from_dt = datetime.fromisoformat(date_from)
             date_to_dt = datetime.fromisoformat(date_to)
-            logger.info(f"📅 Дата начала: {date_from_dt}, Дата окончания: {date_to_dt}")
+            logger.info(f"YTH_HGAS:  Дата начала: {date_from_dt}, Дата окончания: {date_to_dt}")
 
             # Если указан конкретный мастер и одна услуга, используем новые методы
             if staff_id and len(service_ids) == 1:
-                logger.info("🆕 Используем новые методы get_available_days + get_available_times")
+                logger.info("YTH_HGAS:  Используем новые методы get_available_days + get_available_times")
                 try:
                     slots = await self.yclients.get_available_slots_for_staff(
                         staff_id=staff_id,
@@ -996,7 +1021,7 @@ class YclientsToolsHandler:
                 except Exception as e:
                     # Проверяем, является ли это ошибкой недоступности мастера
                     if hasattr(e, 'error_code') and e.error_code == 'STAFF_UNAVAILABLE':
-                        logger.warning(f"⚠️ Мастер {staff_id} недоступен для услуги {service_ids[0]}")
+                        logger.warning(f"YTH_HGAS:  Мастер {staff_id} недоступен для услуги {service_ids[0]}")
 
                         # Получаем альтернативных мастеров
                         alternative_masters = await self._get_alternative_masters(service_ids[0])
@@ -1016,14 +1041,14 @@ class YclientsToolsHandler:
                         # Для других ошибок - пробрасываем дальше
                         raise
             else:
-                logger.info("📞 Используем старый метод get_available_slots()...")
+                logger.info("YTH_HGAS:  Используем старый метод get_available_slots()...")
                 slots = await self.yclients.get_available_slots(
                     service_ids=service_ids,
                     date_from=date_from_dt,
                     date_to=date_to_dt,
                     staff_id=staff_id
                 )
-            logger.info(f"📥 Получено {len(slots) if slots else 0} слотов от Yclients")
+            logger.info(f"YTH_HGAS:  Получено {len(slots) if slots else 0} слотов от Yclients")
 
             result = [
                 {
@@ -1035,14 +1060,14 @@ class YclientsToolsHandler:
                 for slot in slots[:20]  # Ограничиваем количество для экономии токенов
             ]
 
-            logger.info(f"✅ Tool get_available_slots: успешно обработано {len(slots)} слотов (показано {len(result)})")
+            logger.info(f"YTH_HGAS:  Tool get_available_slots: успешно обработано {len(slots)} слотов (показано {len(result)})")
             if result:
-                logger.info(f"📊 Первые 3 слота: {result[:3]}")
+                logger.info(f"YTH_HGAS:  Первые 3 слота: {result[:3]}")
 
             return {"slots": result, "total_found": len(slots), "success": True}
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool get_available_slots: {e}")
-            logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HGAS:  Ошибка в tool get_available_slots: {e}")
+            logger.error(f"YTH_HGAS:  Тип ошибки: {type(e).__name__}")
             return {"error": str(e), "success": False}
 
     async def _get_alternative_masters(self, service_id: int) -> List[Dict[str, Any]]:
@@ -1056,47 +1081,48 @@ class YclientsToolsHandler:
             Список мастеров с их данными
         """
         try:
-            logger.info(f"🔍 Поиск альтернативных мастеров для услуги {service_id}")
+            logger.info(f"YTH_GAM:  Поиск альтернативных мастеров для услуги {service_id}")
 
             # Получаем всех мастеров из базы знаний
             masters_result = await self.handle_get_staff()
 
             if not masters_result.get('success', False):
-                logger.warning("⚠️ Не удалось получить список мастеров")
+                logger.warning("YTH_GAM:  Не удалось получить список мастеров")
                 return []
 
             all_masters = masters_result.get('staff', [])
-            logger.info(f"📋 Найдено мастеров в базе знаний: {len(all_masters)}")
+            logger.info(f"YTH_GAM:  Найдено мастеров в базе знаний: {len(all_masters)}")
 
             # Возвращаем первых 3-5 мастеров как альтернативы
             # TODO: В будущем можно добавить логику фильтрации по специализации
             alternative_masters = all_masters[:5]
 
-            logger.info(f"✅ Подготовлено {len(alternative_masters)} альтернативных мастеров")
+            logger.info(f"YTH_GAM:  Подготовлено {len(alternative_masters)} альтернативных мастеров")
             return alternative_masters
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при получении альтернативных мастеров: {e}")
+            logger.error(f"YTH_GAM:  Ошибка при получении альтернативных мастеров: {e}")
             return []
 
     async def handle_create_booking(self, phone: str, fullname: str, service_ids: List[int],
                                   staff_id: int, booking_datetime: str, email: Optional[str] = None,
                                   comment: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """Tool handler: создать запись в локальной базе данных"""
-        logger.info(f"🛠️ Обработка tool: create_booking(client='{fullname}', phone='{phone}', "
+        logger.info(f"YTH_HCB: Обработка tool: create_booking(client='{fullname}', phone='{phone}', "
                    f"services={service_ids}, staff={staff_id}, datetime='{booking_datetime}')")
-        logger.info(f"📋 Параметры вызова: phone='{phone}', fullname='{fullname}', service_ids={service_ids}, "
+        logger.info(f"YTH_HCB: Параметры вызова: phone='{phone}', fullname='{fullname}', service_ids={service_ids}, "
                    f"staff_id={staff_id}, booking_datetime='{booking_datetime}', email='{email}', "
                    f"comment='{comment}', kwargs={kwargs}")
+        logger.info(f"YTH_HCB: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
             # Парсим дату
-            logger.info("📅 Парсим дату бронирования...")
+            logger.info("YTH_HCB:  Парсим дату бронирования...")
             booking_dt = datetime.fromisoformat(booking_datetime.replace('Z', '+00:00'))
-            logger.info(f"📅 Дата бронирования: {booking_dt}")
+            logger.info(f"YTH_HCB:  Дата бронирования: {booking_dt}")
 
             # Сохраняем запись в локальную базу данных
-            logger.info("💾 Сохраняем запись в локальную базу данных...")
+            logger.info("YTH_HCB:  Сохраняем запись в локальную базу данных...")
 
             with SessionLocal() as db:
                 # Проверяем/создаем клиента
@@ -1123,7 +1149,7 @@ class YclientsToolsHandler:
                     db.add(client)
                     db.commit()
                     db.refresh(client)
-                    logger.info(f"✅ Создан новый клиент ID: {client.id} для {fullname} ({phone})")
+                    logger.info(f"YTH_HCB:  Создан новый клиент ID: {client.id} для {fullname} ({phone})")
                 else:
                     # Обновляем данные клиента если нужно
                     updated = False
@@ -1136,7 +1162,7 @@ class YclientsToolsHandler:
                         updated = True
                     if updated:
                         db.commit()
-                    logger.info(f"📋 Используем существующего клиента ID: {client.id}")
+                    logger.info(f"YTH_HCB:  Используем существующего клиента ID: {client.id}")
 
                 # Получаем названия услуг из service_ids (для отображения)
                 service_names = []
@@ -1148,7 +1174,7 @@ class YclientsToolsHandler:
                     for service_id in service_ids:
                         service_name = services_dict.get(service_id, f"Услуга #{service_id}")
                         service_names.append(service_name)
-                        logger.info(f"📋 Услуга ID {service_id} -> '{service_name}'")
+                        logger.info(f"YTH_HCB:  Услуга ID {service_id} -> '{service_name}'")
 
                 # Получаем реальное имя мастера из staff_id
                 staff_name = f"Мастер #{staff_id}"
@@ -1159,10 +1185,10 @@ class YclientsToolsHandler:
                         for staff_member in staff_data['data']:
                             if staff_member.get('id') == staff_id:
                                 staff_name = staff_member.get('name', f"Мастер #{staff_id}")
-                                logger.info(f"👨‍💼 Мастер ID {staff_id} -> '{staff_name}'")
+                                logger.info(f"YTH_HCB:  Мастер ID {staff_id} -> '{staff_name}'")
                                 break
                 except Exception as e:
-                    logger.warning(f"⚠️ Не удалось получить имя мастера ID {staff_id}: {e}")
+                    logger.warning(f"YTH_HCB:  Не удалось получить имя мастера ID {staff_id}: {e}")
                     # Оставляем заглушку
 
                 # Создаем запись о встрече
@@ -1184,7 +1210,7 @@ class YclientsToolsHandler:
                 db.commit()
                 db.refresh(appointment)
 
-                logger.info(f"✅ Запись успешно создана в локальной БД с ID: {appointment.id}")
+                logger.info(f"YTH_HCB:  Запись успешно создана в локальной БД с ID: {appointment.id}")
 
                 result = {
                     "success": True,
@@ -1198,27 +1224,27 @@ class YclientsToolsHandler:
                     "message": "Запись успешно создана в системе"
                 }
 
-                logger.info(f"📊 Детали записи: {result}")
+                logger.info(f"YTH_HCB:  Детали записи: {result}")
                 return {"booking": result, "success": True}
 
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool create_booking: {e}")
-            logger.error(f"🔍 Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HCB:  Ошибка в tool create_booking: {e}")
+            logger.error(f"YTH_HCB:  Тип ошибки: {type(e).__name__}")
             return {"error": str(e), "success": False}
 
     async def handle_get_available_days(self, staff_id: int, service_id: int, **kwargs) -> Dict[str, Any]:
         """Tool handler: получить доступные дни для записи к сотруднику"""
-        logger.info(f"🛠️ Обработка tool: get_available_days(staff_id={staff_id}, service_id={service_id})")
+        logger.info(f"YTH_HGAD:  Обработка tool: get_available_days(staff_id={staff_id}, service_id={service_id})")
 
         try:
-            logger.info("📞 Вызываем yclients.get_available_days()...")
+            logger.info("YTH_HGAD:  Вызываем yclients.get_available_days()...")
             booking_days = await self.yclients.get_available_days(staff_id=staff_id, service_id=service_id)
 
             # Проверяем на ошибку недоступности мастера
             if 'error' in booking_days:
                 error_code = booking_days.get('error_code')
                 if error_code == 'STAFF_UNAVAILABLE':
-                    logger.warning(f"⚠️ Мастер {staff_id} недоступен для услуги {service_id}")
+                    logger.warning(f"YTH_HGAD:  Мастер {staff_id} недоступен для услуги {service_id}")
                     return {
                         "error": booking_days['error'],
                         "error_code": "STAFF_UNAVAILABLE",
@@ -1234,7 +1260,7 @@ class YclientsToolsHandler:
                     }
 
             days = booking_days['data'].get('booking_dates', [])
-            logger.info(f"📥 Получено {len(days)} доступных дней")
+            logger.info(f"YTH_HGAD:  Получено {len(days)} доступных дней")
 
             # Преобразуем timestamps в читаемые даты для удобства
             readable_days = []
@@ -1252,29 +1278,29 @@ class YclientsToolsHandler:
                             "timestamp": None
                         })
                 except Exception as e:
-                    logger.warning(f"⚠️ Ошибка обработки даты {day}: {e}")
+                    logger.warning(f"YTH_HGAD:  Ошибка обработки даты {day}: {e}")
                     continue
 
-            logger.info(f"✅ Tool get_available_days: успешно обработано {len(days)} дней")
+            logger.info(f"YTH_HGAD:  Tool get_available_days: успешно обработано {len(days)} дней")
             return {
                 "days": readable_days[:10],  # Ограничиваем для экономии токенов
                 "total_found": len(days),
                 "success": True
             }
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool get_available_days: {e}")
+            logger.error(f"YTH_HGAD:  Ошибка в tool get_available_days: {e}")
             return {"error": str(e), "success": False}
 
     async def handle_get_available_times(self, staff_id: int, service_id: int, day: str, **kwargs) -> Dict[str, Any]:
         """Tool handler: получить доступные временные слоты на конкретную дату"""
-        logger.info(f"🛠️ Обработка tool: get_available_times(staff_id={staff_id}, service_id={service_id}, day='{day}')")
+        logger.info(f"YTH_HGAT:  Обработка tool: get_available_times(staff_id={staff_id}, service_id={service_id}, day='{day}')")
 
         try:
-            logger.info("📞 Вызываем yclients.get_available_times()...")
+            logger.info("YTH_HGAT:  Вызываем yclients.get_available_times()...")
             time_slots = await self.yclients.get_available_times(staff_id=staff_id, service_id=service_id, day=day)
 
             slots = time_slots['data']
-            logger.info(f"📥 Получено {len(slots)} временных слотов")
+            logger.info(f"YTH_HGAT:  Получено {len(slots)} временных слотов")
 
             # Форматируем слоты для удобства чтения
             formatted_slots = []
@@ -1296,15 +1322,16 @@ class YclientsToolsHandler:
 
                     formatted_slots.append(formatted_slot)
                 except Exception as e:
-                    logger.warning(f"⚠️ Ошибка форматирования слота {slot}: {e}")
+                    logger.warning(f"YTH_HGAT:  Ошибка форматирования слота {slot}: {e}")
                     continue
 
-            logger.info(f"✅ Tool get_available_times: успешно обработано {len(slots)} слотов")
+            logger.info(f"YTH_HGAT:  Tool get_available_times: успешно обработано {len(slots)} слотов")
             return {
                 "slots": formatted_slots[:15],  # Ограничиваем для экономии токенов
                 "total_found": len(slots),
                 "success": True
             }
         except Exception as e:
-            logger.error(f"❌ Ошибка в tool get_available_times: {e}")
+            logger.error(f"YTH_HGAT: Ошибка в tool get_available_times: {e}")
+            logger.error(f"YTH_HGAT: Полная информация об ошибке: {str(e)}", exc_info=True)
             return {"error": str(e), "success": False}

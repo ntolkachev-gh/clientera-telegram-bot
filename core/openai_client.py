@@ -38,6 +38,7 @@ OPENAI_TIMEOUTS = {
 # Цены на токены (в долларах за 1000 токенов) и характеристики скорости
 PRICING = {
     "gpt-5": {"input": 0.005, "output": 0.015, "speed": "slow", "quality": "highest"},
+    "gpt-5-mini": {"input": 0.0005, "output": 0.002, "speed": "fast",  "quality": "high"},
     "gpt-4o": {"input": 0.005, "output": 0.015, "speed": "medium", "quality": "high"},
     "gpt-4o-mini": {"input": 0.00015, "output": 0.0006, "speed": "fast", "quality": "good"},
     "gpt-4": {"input": 0.03, "output": 0.06, "speed": "slow", "quality": "high"},
@@ -48,6 +49,7 @@ PRICING = {
 # Характеристики моделей по скорости (в секундах на запрос)
 MODEL_SPEED_CHARACTERISTICS = {
     "gpt-5": {"speed": "slow", "avg_response_time": 25.0, "recommendation": "Только для сложных задач"},
+    "gpt-5-mini": {"speed": "fast", "avg_response_time": 5.0, "recommendation": "Оптимальный выбор для большинства задач"},
     "gpt-4o": {"speed": "medium", "avg_response_time": 8.0, "recommendation": "Сбалансированный выбор"},
     "gpt-4o-mini": {"speed": "fast", "avg_response_time": 3.0, "recommendation": "Рекомендуется для скорости"},
     "gpt-4": {"speed": "slow", "avg_response_time": 15.0, "recommendation": "Устаревшая, медленная"},
@@ -86,10 +88,10 @@ class OpenAIClient:
         for model_name, model_data in MODEL_SPEED_CHARACTERISTICS.items():
             missing_keys = [key for key in required_keys if key not in model_data]
             if missing_keys:
-                logger.error(f"❌ Модель '{model_name}' не содержит ключи: {missing_keys}")
-                logger.error(f"📊 Текущие данные: {model_data}")
+                logger.error(f" Модель '{model_name}' не содержит ключи: {missing_keys}")
+                logger.error(f" Текущие данные: {model_data}")
             else:
-                logger.debug(f"✅ Модель '{model_name}' корректно определена")
+                logger.debug(f" Модель '{model_name}' корректно определена")
 
     def select_model_for_task(self, task_complexity: str = "medium") -> str:
         """
@@ -113,12 +115,12 @@ class OpenAIClient:
 
     def get_model_info(self, model: str) -> dict:
         """Получение информации о модели"""
-        logger.debug(f"🔍 Получение информации о модели: {model}")
-        logger.debug(f"📊 Доступные модели: {list(MODEL_SPEED_CHARACTERISTICS.keys())}")
+        logger.debug(f"OAI_GMI:  Получение информации о модели: {model}")
+        logger.debug(f"OAI_GMI:  Доступные модели: {list(MODEL_SPEED_CHARACTERISTICS.keys())}")
 
         if model in MODEL_SPEED_CHARACTERISTICS:
             model_data = MODEL_SPEED_CHARACTERISTICS[model]
-            logger.debug(f"✅ Модель найдена: {model_data}")
+            logger.debug(f"OAI_GMI:  Модель найдена: {model_data}")
             return {
                 "model": model,
                 "speed": model_data.get("speed", "unknown"),
@@ -128,7 +130,7 @@ class OpenAIClient:
             }
         else:
             # Безопасная обработка для неизвестных моделей
-            logger.warning(f"⚠️ Модель '{model}' не найдена в справочнике. Доступные: {list(MODEL_SPEED_CHARACTERISTICS.keys())}")
+            logger.warning(f"OAI_GMI:  Модель '{model}' не найдена в справочнике. Доступные: {list(MODEL_SPEED_CHARACTERISTICS.keys())}")
             return {
                 "model": model,
                 "speed": "unknown",
@@ -150,7 +152,7 @@ class OpenAIClient:
                 model_data = MODEL_SPEED_CHARACTERISTICS[model]
                 speed_info = f" | Скорость: {model_data.get('speed', 'unknown')} ({model_data.get('avg_response_time', 0):.1f}s)"
 
-        logger.info(f"💰 OpenAI использование - Модель: {model}, Цель: {purpose}, "
+        logger.info(f"OAI_LU: OpenAI использование - Модель: {model}, Цель: {purpose}, "
                    f"Токенов: {total_tokens} (вход: {prompt_tokens}, выход: {completion_tokens}), "
                    f"Стоимость: ${cost:.4f}{speed_info}")
 
@@ -173,7 +175,7 @@ class OpenAIClient:
         if model is None:
             model = settings.openai_default_model
 
-        logger.info(f"🤖 Отправка запроса в OpenAI - Модель: {model}, Клиент: {client_id}")
+        logger.info(f"OAI_CC: 🤖 Отправка запроса в OpenAI - Модель: {model}, Клиент: {client_id}")
         try:
             # Параметры для разных моделей
             if model.startswith("gpt-5"):
@@ -205,11 +207,11 @@ class OpenAIClient:
             )
 
             response_content = response.choices[0].message.content
-            logger.info(f"✅ Получен ответ от OpenAI: {response_content[:100]}...")
+            logger.info(f"OAI_CC:  Получен ответ от OpenAI: {response_content[:100]}...")
             return response_content
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при обращении к OpenAI: {e}")
+            logger.error(f"OAI_CC:  Ошибка при обращении к OpenAI: {e}")
             return "Извините, произошла ошибка при обработке вашего запроса."
 
     async def extract_facts(self, conversation_history: str,
@@ -221,7 +223,7 @@ class OpenAIClient:
                 conversation_history=conversation_history
             )
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка: не удалось загрузить промпт для извлечения фактов: {e}")
+            logger.error(f"OAI_EF:  Критическая ошибка: не удалось загрузить промпт для извлечения фактов: {e}")
             return {
                 "favorite_services": [],
                 "favorite_masters": [],
@@ -262,7 +264,7 @@ class OpenAIClient:
             return json.loads(response.choices[0].message.content)
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при извлечении фактов: {e}")
+            logger.error(f"OAI_EF:  Ошибка при извлечении фактов: {e}")
             return {}
 
     async def create_embeddings(self, texts: List[str]) -> List[List[float]]:
@@ -288,7 +290,7 @@ class OpenAIClient:
             return [embedding.embedding for embedding in response.data]
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при создании эмбеддингов: {e}")
+            logger.error(f"OAI_CE:  Ошибка при создании эмбеддингов: {e}")
             return []
 
     async def process_booking_request(self, user_message: str,
@@ -299,7 +301,7 @@ class OpenAIClient:
 
         # Если доступны tools, используем их для более точной обработки
         if use_tools and self.yclients and self.available_tools:
-            logger.info("🔧 Используем tools для обработки запроса на запись")
+            logger.info(" Используем tools для обработки запроса на запись")
 
             try:
                 system_prompt = format_prompt(
@@ -309,7 +311,7 @@ class OpenAIClient:
                     preferred_time_slots=client_profile.get('preferred_time_slots', [])
                 )
             except Exception as e:
-                logger.error(f"❌ Критическая ошибка: не удалось загрузить системный промпт: {e}")
+                logger.error(f" Критическая ошибка: не удалось загрузить системный промпт: {e}")
                 return {
                     "intent": "other",
                     "confidence": 0.0,
@@ -342,7 +344,7 @@ class OpenAIClient:
                 }
 
             except Exception as e:
-                logger.error(f"❌ Ошибка при использовании tools: {e}")
+                logger.error(f" Ошибка при использовании tools: {e}")
                 # Fallback к старому методу
                 use_tools = False
 
@@ -362,7 +364,7 @@ class OpenAIClient:
                 services_list=services_list_text
             )
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка: не удалось загрузить промпт для анализа бронирования: {e}")
+            logger.error(f" Критическая ошибка: не удалось загрузить промпт для анализа бронирования: {e}")
             return {
                 "intent": "other",
                 "confidence": 0.0,
@@ -401,12 +403,12 @@ class OpenAIClient:
             result = json.loads(response.choices[0].message.content)
 
             # Добавляем логирование для отладки
-            logger.info(f"🔍 Анализ запроса: '{user_message}' -> intent: {result.get('intent')}")
+            logger.info(f" Анализ запроса: '{user_message}' -> intent: {result.get('intent')}")
 
             return result
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при обработке запроса на запись: {e}")
+            logger.error(f" Ошибка при обработке запроса на запись: {e}")
             return {
                 "intent": "other",
                 "confidence": 0.0,
@@ -438,36 +440,36 @@ class OpenAIClient:
             max_tool_calls = getattr(settings, 'openai_max_tool_calls', 3)
 
         if not self.yclients or not self.available_tools:
-            logger.warning("⚠️ Tools не доступны, используем обычный chat_completion")
+            logger.warning(" Tools не доступны, используем обычный chat_completion")
             return await self.chat_completion(messages, client_id, model)
 
         if model is None:
             # Используем быструю модель по умолчанию для ускорения
             if getattr(settings, 'use_fast_model_by_default', True):
-                model = getattr(settings, 'openai_fast_model', 'gpt-4o-mini')
+                model = getattr(settings, 'openai_fast_model', 'gpt-5-mini')
                 logger.info(f"🚀 Используем быструю модель по умолчанию: {model}")
             else:
                 model = settings.openai_default_model
 
         # Дополнительная проверка модели
-        logger.info(f"🔍 Проверяем модель: '{model}' (тип: {type(model)})")
+        logger.info(f" Проверяем модель: '{model}' (тип: {type(model)})")
         if not isinstance(model, str):
-            logger.error(f"❌ Некорректный тип модели: {type(model)}, значение: {model}")
-            model = "gpt-4o-mini"  # Fallback к безопасной модели
-            logger.info(f"🔄 Используем fallback модель: {model}")
+            logger.error(f" Некорректный тип модели: {type(model)}, значение: {model}")
+            model = "gpt-5-mini"  # Fallback к безопасной модели
+            logger.info(f" Используем fallback модель: {model}")
 
         logger.info(f"🤖 Отправка запроса в OpenAI с tools - Модель: {model}, Клиент: {client_id}")
-        logger.info(f"🔧 Доступно tools: {len(self.available_tools)}")
-        logger.info(f"⏱️ Максимум итераций: {max_tool_calls}")
+        logger.info(f" Доступно tools: {len(self.available_tools)}")
+        logger.info(f" Максимум итераций: {max_tool_calls}")
 
         # Логируем информацию о выбранной модели
         try:
             model_info = self.get_model_info(model)
-            logger.info(f"📊 Модель: {model_info['model']} | Скорость: {model_info['speed']} | "
+            logger.info(f"OAI_PMWT: Модель: {model_info['model']} | Скорость: {model_info['speed']} | "
                        f"Ожидаемое время: {model_info['avg_response_time']:.1f}s | "
                        f"Рекомендация: {model_info['recommendation']}")
         except Exception as e:
-            logger.error(f"❌ Ошибка при получении информации о модели '{model}': {e}")
+            logger.error(f" Ошибка при получении информации о модели '{model}': {e}")
             # Используем безопасные значения по умолчанию
             model_info = {
                 "model": model,
@@ -533,11 +535,11 @@ class OpenAIClient:
 
                 # Если нет вызовов функций, возвращаем ответ
                 if not message.tool_calls:
-                    logger.info(f"✅ Получен финальный ответ от OpenAI: {message.content[:100]}...")
+                    logger.info(f" Получен финальный ответ от OpenAI: {message.content[:100]}...")
                     return message.content or "Извините, не удалось получить ответ."
 
                 # Обрабатываем вызовы функций параллельно
-                logger.info(f"🔧 Модель запросила {len(message.tool_calls)} tool(s)")
+                logger.info(f" Модель запросила {len(message.tool_calls)} tool(s)")
                 logger.info("🚀 Запускаем parallel tool calling...")
 
                 # Создаем задачи для параллельного выполнения
@@ -545,19 +547,19 @@ class OpenAIClient:
                     function_name = tool_call.function.name
                     function_args = json.loads(tool_call.function.arguments)
 
-                    logger.info(f"📞 Параллельный вызов функции: {function_name}({function_args})")
+                    logger.info(f" Параллельный вызов функции: {function_name}({function_args})")
 
                     # Вызываем соответствующую функцию
                     if function_name in self.tool_functions:
                         try:
                             tool_result = await self.tool_functions[function_name](**function_args)
-                            logger.info(f"📋 Результат {function_name}: {str(tool_result)[:200]}...")
+                            logger.info(f" Результат {function_name}: {str(tool_result)[:200]}...")
                             return tool_call.id, tool_result
                         except Exception as e:
-                            logger.error(f"❌ Ошибка при вызове {function_name}: {e}")
+                            logger.error(f" Ошибка при вызове {function_name}: {e}")
                             return tool_call.id, {"error": f"Ошибка выполнения функции: {str(e)}", "success": False}
                     else:
-                        logger.error(f"❌ Неизвестная функция: {function_name}")
+                        logger.error(f" Неизвестная функция: {function_name}")
                         return tool_call.id, {"error": f"Неизвестная функция: {function_name}", "success": False}
 
                 # Запускаем все tool calls параллельно
@@ -567,7 +569,7 @@ class OpenAIClient:
                 # Обрабатываем результаты
                 for i, result in enumerate(tool_results):
                     if isinstance(result, Exception):
-                        logger.error(f"❌ Исключение при выполнении tool call: {result}")
+                        logger.error(f" Исключение при выполнении tool call: {result}")
                         tool_call_id = message.tool_calls[i].id
                         tool_result = {"error": f"Исключение: {str(result)}", "success": False}
                     else:
@@ -580,21 +582,21 @@ class OpenAIClient:
                         "content": json.dumps(tool_result, ensure_ascii=False)
                     })
 
-                logger.info(f"✅ Завершено параллельное выполнение {len(message.tool_calls)} tool(s)")
+                logger.info(f" Завершено параллельное выполнение {len(message.tool_calls)} tool(s)")
 
                 tool_calls_count += 1
-                logger.info(f"🔄 Итерация {tool_calls_count}, продолжаем диалог...")
+                logger.info(f" Итерация {tool_calls_count}, продолжаем диалог...")
 
             # Если достигли лимита вызовов
-            logger.warning(f"⚠️ Достигнут лимит вызовов tools ({max_tool_calls})")
+            logger.warning(f" Достигнут лимит вызовов tools ({max_tool_calls})")
             return "Извините, не удалось обработать ваш запрос полностью. Попробуйте упростить вопрос."
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при обращении к OpenAI с tools: {e}")
+            logger.error(f" Ошибка при обращении к OpenAI с tools: {e}")
             return "Извините, произошла ошибка при обработке вашего запроса."
         finally:
             # Логируем общее время выполнения
             end_time = datetime.now()
             total_time = (end_time - start_time).total_seconds()
-            logger.info(f"⏱️ Общее время выполнения: {total_time:.2f} секунд")
-            logger.info(f"📊 Модель {model} показала {'быструю' if total_time < 10 else 'среднюю' if total_time < 20 else 'медленную'} производительность")
+            logger.info(f" Общее время выполнения: {total_time:.2f} секунд")
+            logger.info(f" Модель {model} показала {'быструю' if total_time < 10 else 'среднюю' if total_time < 20 else 'медленную'} производительность")

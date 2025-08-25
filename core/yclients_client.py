@@ -106,7 +106,7 @@ class YclientsClient:
         self._services_cache = None
         self._staff_cache = None
         self._cache_timestamp = None
-        logger.info("🗑️ Кэш справочников очищен")
+        logger.info("YC_CC: Кэш справочников очищен")
 
     async def _fetch_real_services_from_api(self) -> List[Dict[str, Any]]:
         """
@@ -116,18 +116,18 @@ class YclientsClient:
             Список услуг из реального API
         """
         try:
-            logger.info("🔄 Запрос реальных услуг из proxy endpoint /api/v1/services...")
+            logger.info("YC_FRSFA: Запрос реальных услуг из proxy endpoint /api/v1/services...")
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Используем новый endpoint для получения списка услуг
                 url = f"{self.base_url}/api/v1/services"
 
                 response = await client.get(url, headers=self.headers)
-                logger.info(f"📡 API ответ (services): статус {response.status_code}")
+                logger.info(f"YC_FRSFA:  API ответ (services): статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от services API")
+                    logger.info(f"YC_FRSFA:  Успешный ответ от services API")
 
                     # Новый API возвращает структуру:
                     # {"services": [...], "total_count": 78, "success": true}
@@ -135,20 +135,20 @@ class YclientsClient:
 
                     if isinstance(data, dict) and data.get('success') and 'services' in data:
                         services_data = data['services']
-                        logger.info(f"🎯 Найдено услуг: {len(services_data)}")
+                        logger.info(f"YC_FRSFA:  Найдено услуг: {len(services_data)}")
                         return services_data
                     else:
-                        logger.warning("⚠️ Неожиданная структура ответа services API")
+                        logger.warning("YC_FRSFA:  Неожиданная структура ответа services API")
                         if isinstance(data, dict):
-                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                            logger.info(f"YC_FRSFA: Ключи ответа: {list(data.keys())}")
                         return []
 
                 else:
-                    logger.error(f"❌ Ошибка services API: {response.status_code} - {response.text}")
+                    logger.error(f"YC_FRSFA:  Ошибка services API: {response.status_code} - {response.text}")
                     return []
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе к services API: {str(e)}")
+            logger.error(f"YC_FRSFA:  Ошибка при запросе к services API: {str(e)}")
             return []
 
     async def _fetch_real_staff_from_api(self) -> List[Dict[str, Any]]:
@@ -159,35 +159,35 @@ class YclientsClient:
             Список сотрудников из реального API
         """
         try:
-            logger.info("🔄 Запрос реальных сотрудников из proxy endpoint /api/v1/staff...")
+            logger.info("YC_FRSFA2:  Запрос реальных сотрудников из proxy endpoint /api/v1/staff...")
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Используем новый endpoint для получения списка сотрудников
                 url = f"{self.base_url}/api/v1/staff"
 
                 response = await client.get(url, headers=self.headers)
-                logger.info(f"📡 API ответ (staff): статус {response.status_code}")
+                logger.info(f"YC_FRSFA2:  API ответ (staff): статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от staff API")
+                    logger.info(f"YC_FRSFA2:  Успешный ответ от staff API")
 
                     if isinstance(data, dict) and data.get('success') and 'staff' in data:
                         staff_data = data['staff']
-                        logger.info(f"🎯 Найдено сотрудников: {len(staff_data)}")
+                        logger.info(f"YC_FRSFA2:  Найдено сотрудников: {len(staff_data)}")
                         return staff_data
                     else:
-                        logger.warning("⚠️ Неожиданная структура ответа staff API")
+                        logger.warning("YC_FRSFA2:  Неожиданная структура ответа staff API")
                         if isinstance(data, dict):
-                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                            logger.info(f"YC_FRSFA2: Ключи ответа: {list(data.keys())}")
                         return []
 
                 else:
-                    logger.error(f"❌ Ошибка staff API: {response.status_code} - {response.text}")
+                    logger.error(f"YC_FRSFA2:  Ошибка staff API: {response.status_code} - {response.text}")
                     return []
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе сотрудников к staff API: {str(e)}")
+            logger.error(f"YC_FRSFA2:  Ошибка при запросе сотрудников к staff API: {str(e)}")
             return []
 
     async def _fetch_services_for_staff(self, staff_id: int) -> List[Dict[str, Any]]:
@@ -201,34 +201,34 @@ class YclientsClient:
             Список услуг, которые может выполнить данный мастер
         """
         try:
-            logger.info(f"🔄 Запрос услуг для мастера {staff_id} из proxy endpoint...")
+            logger.info(f"YC_FSFS:  Запрос услуг для мастера {staff_id} из proxy endpoint...")
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 url = f"{self.base_url}/api/v1/services/staff/{staff_id}"
 
                 response = await client.get(url, headers=self.headers)
-                logger.info(f"📡 API ответ (services/staff/{staff_id}): статус {response.status_code}")
+                logger.info(f"YC_FSFS:  API ответ (services/staff/{staff_id}): статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от services/staff API для мастера {staff_id}")
+                    logger.info(f"YC_FSFS:  Успешный ответ от services/staff API для мастера {staff_id}")
 
                     if isinstance(data, dict) and data.get('success') and 'services' in data:
                         services_data = data['services']
-                        logger.info(f"🎯 Найдено услуг для мастера {staff_id}: {len(services_data)}")
+                        logger.info(f"YC_FSFS:  Найдено услуг для мастера {staff_id}: {len(services_data)}")
                         return services_data
                     else:
-                        logger.warning(f"⚠️ Неожиданная структура ответа services/staff API для мастера {staff_id}")
+                        logger.warning(f"YC_FSFS:  Неожиданная структура ответа services/staff API для мастера {staff_id}")
                         if isinstance(data, dict):
-                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                            logger.info(f"YC_FSFS: Ключи ответа: {list(data.keys())}")
                         return []
 
                 else:
-                    logger.error(f"❌ Ошибка services/staff API для мастера {staff_id}: {response.status_code} - {response.text}")
+                    logger.error(f"YC_FSFS:  Ошибка services/staff API для мастера {staff_id}: {response.status_code} - {response.text}")
                     return []
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе услуг для мастера {staff_id}: {str(e)}")
+            logger.error(f"YC_FSFS:  Ошибка при запросе услуг для мастера {staff_id}: {str(e)}")
             return []
 
     # ============================================================================
@@ -247,19 +247,19 @@ class YclientsClient:
             Список услуг с ID, названием, длительностью, ценой, списком мастеров
         """
         if not force_refresh and self._is_cache_valid() and self._services_cache:
-            logger.info("📋 Возвращаем услуги из кэша")
+            logger.info("YC_GS:  Возвращаем услуги из кэша")
             return self._services_cache
 
         services = []
 
         if use_real_api:
             # Пытаемся получить реальные данные из API
-            logger.info("🔄 Загружаем список услуг из реального API YClients...")
+            logger.info("YC_GS:  Загружаем список услуг из реального API YClients...")
             real_services_data = await self._fetch_real_services_from_api()
 
             if real_services_data:
                 # Сначала получаем список всех мастеров для определения staff_ids
-                logger.info("🔄 Получаем список мастеров для определения staff_ids...")
+                logger.info("YC_GS:  Получаем список мастеров для определения staff_ids...")
                 staff_list = await self.get_staff(force_refresh=True, use_real_api=True)
 
                 # Создаем словарь для маппинга услуг к мастерам
@@ -275,9 +275,9 @@ class YclientsClient:
                                 if service_id not in service_to_staff_mapping:
                                     service_to_staff_mapping[service_id] = []
                                 service_to_staff_mapping[service_id].append(staff.id)
-                        logger.info(f"✅ Получено {len(staff_services)} услуг для мастера {staff.name} (ID: {staff.id})")
+                        logger.info(f"YC_GS:  Получено {len(staff_services)} услуг для мастера {staff.name} (ID: {staff.id})")
                     except Exception as e:
-                        logger.warning(f"⚠️ Ошибка при получении услуг для мастера {staff.id}: {str(e)}")
+                        logger.warning(f"YC_GS:  Ошибка при получении услуг для мастера {staff.id}: {str(e)}")
                         continue
 
                 # Теперь преобразуем реальные данные API в наш формат
@@ -309,20 +309,20 @@ class YclientsClient:
                             staff_ids=staff_ids
                         )
                         services.append(service)
-                        logger.info(f"✅ Добавлена услуга: {service.title} - {service.price} руб ({service.duration} мин) - Мастера: {staff_ids if staff_ids else 'Любой'}")
+                        logger.info(f"YC_GS:  Добавлена услуга: {service.title} - {service.price} руб ({service.duration} мин) - Мастера: {staff_ids if staff_ids else 'Любой'}")
                     except Exception as e:
-                        logger.warning(f"⚠️ Ошибка при обработке услуги {i}: {str(e)}")
-                        logger.warning(f"Данные услуги: {json.dumps(service_data, ensure_ascii=False, indent=2)[:300]}...")
+                        logger.warning(f"YC_GS:  Ошибка при обработке услуги {i}: {str(e)}")
+                        logger.warning(f"YC_GS: Данные услуги: {json.dumps(service_data, ensure_ascii=False, indent=2)[:300]}...")
                         continue
 
-                logger.info(f"✅ Загружено {len(services)} реальных услуг из API с маппингом мастеров")
+                logger.info(f"YC_GS:  Загружено {len(services)} реальных услуг из API с маппингом мастеров")
             else:
-                logger.warning("⚠️ Не удалось получить услуги из API, используем мок данные")
+                logger.warning("YC_GS:  Не удалось получить услуги из API, используем мок данные")
                 use_real_api = False
 
         if not use_real_api or not services:
             # Используем мок данные как fallback
-            logger.info("🔄 Загружаем список услуг из мок данных")
+            logger.info("YC_GS:  Загружаем список услуг из мок данных")
 
             # МОКИРОВАННЫЕ ДАННЫЕ (соответствуют формату нового API с реальными staff_ids)
             mock_services_data = [
@@ -371,7 +371,7 @@ class YclientsClient:
         self._services_cache = services
         self._cache_timestamp = time.time()
 
-        logger.info(f"✅ Загружено {len(services)} услуг")
+        logger.info(f"YC_GS:  Загружено {len(services)} услуг")
         return services
 
     async def get_staff(self, force_refresh: bool = False, use_real_api: bool = True) -> List[Staff]:
@@ -386,14 +386,14 @@ class YclientsClient:
             Список мастеров с ID, именем и списком услуг
         """
         if not force_refresh and self._is_cache_valid() and self._staff_cache:
-            logger.info("👥 Возвращаем мастеров из кэша")
+            logger.info("YC_GST:  Возвращаем мастеров из кэша")
             return self._staff_cache
 
         staff_list = []
 
         if use_real_api:
             # Пытаемся получить реальные данные из API
-            logger.info("🔄 Загружаем список сотрудников из реального API YClients...")
+            logger.info("YC_GST:  Загружаем список сотрудников из реального API YClients...")
             real_staff_data = await self._fetch_real_staff_from_api()
 
             if real_staff_data:
@@ -417,19 +417,19 @@ class YclientsClient:
                             service_ids=service_ids
                         )
                         staff_list.append(staff)
-                        logger.info(f"✅ Добавлен сотрудник: {staff.name} - {staff.specialization}")
+                        logger.info(f"YC_GST:  Добавлен сотрудник: {staff.name} - {staff.specialization}")
                     except Exception as e:
-                        logger.warning(f"⚠️ Ошибка при обработке сотрудника {i}: {str(e)}")
+                        logger.warning(f"YC_GST:  Ошибка при обработке сотрудника {i}: {str(e)}")
                         continue
 
-                logger.info(f"✅ Загружено {len(staff_list)} реальных сотрудников из API")
+                logger.info(f"YC_GST:  Загружено {len(staff_list)} реальных сотрудников из API")
             else:
-                logger.warning("⚠️ Не удалось получить сотрудников из API, используем мок данные")
+                logger.warning("YC_GST:  Не удалось получить сотрудников из API, используем мок данные")
                 use_real_api = False
 
         if not use_real_api or not staff_list:
             # Используем мок данные как fallback
-            logger.info("🔄 Загружаем список мастеров из мок данных")
+            logger.info("YC_GST:  Загружаем список мастеров из мок данных")
 
             # МОКИРОВАННЫЕ ДАННЫЕ (соответствуют формату нового API)
             mock_staff_data = [
@@ -470,7 +470,7 @@ class YclientsClient:
         self._staff_cache = staff_list
         self._cache_timestamp = time.time()
 
-        logger.info(f"✅ Загружено {len(staff_list)} мастеров")
+        logger.info(f"YC_GST:  Загружено {len(staff_list)} мастеров")
         return staff_list
 
     # ============================================================================
@@ -488,7 +488,7 @@ class YclientsClient:
         Returns:
             Словарь с данными о доступных датах: {'data': {'booking_dates': [timestamp1, timestamp2, ...]}}
         """
-        logger.info(f"📅 Запрос доступных дней для мастера {staff_id} и услуги {service_id}")
+        logger.info(f"YC_GAD:  Запрос доступных дней для мастера {staff_id} и услуги {service_id}")
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -510,13 +510,13 @@ class YclientsClient:
                     'staff_id': staff_id
                 }
 
-                logger.info(f"📡 Отправляем POST запрос: {url} с данными {request_data}")
+                logger.info(f"YC_GAD:  Отправляем POST запрос: {url} с данными {request_data}")
                 response = await client.post(url, headers=self.headers, json=request_data)
-                logger.info(f"📡 Ответ API: статус {response.status_code}")
+                logger.info(f"YC_GAD:  Ответ API: статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от booking/slots API")
+                    logger.info(f"YC_GAD:  Успешный ответ от booking/slots API")
 
                     if data.get('success', False) and 'slots' in data:
                         slots = data['slots']
@@ -539,16 +539,16 @@ class YclientsClient:
                             timestamp = int(date_obj.timestamp())
                             booking_dates.append(timestamp)
 
-                        logger.info(f"📅 Найдено доступных дат: {len(booking_dates)}")
+                        logger.info(f"YC_GAD:  Найдено доступных дат: {len(booking_dates)}")
                         return {
                             'data': {'booking_dates': booking_dates},
                             'success': True
                         }
                     else:
-                        logger.error(f"❌ API вернул ошибку: {data}")
+                        logger.error(f"YC_GAD:  API вернул ошибку: {data}")
                         return {'data': {'booking_dates': []}, 'error': data.get('error', 'Неизвестная ошибка')}
                 else:
-                    logger.error(f"❌ Ошибка booking/slots API: {response.status_code} - {response.text}")
+                    logger.error(f"YC_GAD:  Ошибка booking/slots API: {response.status_code} - {response.text}")
                     return {
                         'data': {'booking_dates': []},
                         'error': f'Ошибка API: {response.status_code}',
@@ -556,7 +556,7 @@ class YclientsClient:
                     }
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе доступных дней: {str(e)}")
+            logger.error(f"YC_GAD:  Ошибка при запросе доступных дней: {str(e)}")
             return {'data': {'booking_dates': []}}
 
     async def get_available_times(self, staff_id: int, service_id: int, day: str) -> Dict[str, Any]:
@@ -571,7 +571,7 @@ class YclientsClient:
         Returns:
             Словарь с данными о временных слотах: {'data': [{'time': '09:00', 'duration_seconds': 3600, 'datetime': timestamp}, ...]}
         """
-        logger.info(f"🕐 Запрос доступного времени для мастера {staff_id}, услуги {service_id} на дату {day}")
+        logger.info(f"YC_GAT:  Запрос доступного времени для мастера {staff_id}, услуги {service_id} на дату {day}")
 
         try:
             # Преобразуем day в нужный формат если это timestamp
@@ -593,18 +593,18 @@ class YclientsClient:
                     'day': day_str
                 }
 
-                logger.info(f"📡 Отправляем запрос: {url} с данными {request_data}")
+                logger.info(f"YC_GAT:  Отправляем запрос: {url} с данными {request_data}")
                 response = await client.post(url, headers=self.headers, json=request_data)
-                logger.info(f"📡 Ответ API: статус {response.status_code}")
+                logger.info(f"YC_GAT:  Ответ API: статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от booking/times API")
+                    logger.info(f"YC_GAT:  Успешный ответ от booking/times API")
 
                     if isinstance(data, dict) and data.get('success') and 'slots' in data:
                         slots_data = data['slots']
                         total_found = data.get('total_found', 0)
-                        logger.info(f"🕐 Найдено временных слотов: {len(slots_data)} (всего: {total_found})")
+                        logger.info(f"YC_GAT:  Найдено временных слотов: {len(slots_data)} (всего: {total_found})")
 
                         # Адаптируем новый формат к старому для обратной совместимости
                         adapted_data = {
@@ -623,19 +623,19 @@ class YclientsClient:
                             }
                             adapted_data['data'].append(adapted_slot)
 
-                        logger.info(f"✅ Адаптировано {len(adapted_data['data'])} слотов к старому формату")
+                        logger.info(f"YC_GAT:  Адаптировано {len(adapted_data['data'])} слотов к старому формату")
                         return adapted_data
                     else:
-                        logger.warning("⚠️ Неожиданная структура ответа booking/times API")
+                        logger.warning("YC_GAT:  Неожиданная структура ответа booking/times API")
                         if isinstance(data, dict):
-                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                            logger.info(f"YC_GAT: Ключи ответа: {list(data.keys())}")
                         return {'data': []}
                 else:
-                    logger.error(f"❌ Ошибка API get_available_times: {response.status_code} - {response.text}")
+                    logger.error(f"YC_GAT:  Ошибка API get_available_times: {response.status_code} - {response.text}")
                     return {'data': []}
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе доступного времени: {str(e)}")
+            logger.error(f"YC_GAT:  Ошибка при запросе доступного времени: {str(e)}")
             return {'data': []}
 
     async def get_available_slots_for_staff(self, staff_id: int, service_id: int,
@@ -654,7 +654,7 @@ class YclientsClient:
         Returns:
             Список доступных временных слотов
         """
-        logger.info(f"🔍 Поиск слотов для мастера {staff_id} и услуги {service_id}")
+        logger.info(f"YC_GASFS:  Поиск слотов для мастера {staff_id} и услуги {service_id}")
 
         available_slots = []
 
@@ -664,7 +664,7 @@ class YclientsClient:
 
             # Проверяем на ошибку недоступности мастера
             if 'error' in booking_days and booking_days.get('error_code') == 'STAFF_UNAVAILABLE':
-                logger.warning(f"⚠️ Мастер {staff_id} недоступен для услуги {service_id}")
+                logger.warning(f"YC_GASFS:  Мастер {staff_id} недоступен для услуги {service_id}")
                 # Возвращаем специальный объект ошибки вместо пустого списка
                 raise StaffUnavailableError(
                     f"Мастер недоступен для данной услуги",
@@ -676,10 +676,10 @@ class YclientsClient:
             days = booking_days['data'].get('booking_dates', [])
 
             if not days:
-                logger.info("📅 Нет доступных дней для записи")
+                logger.info("YC_GASFS:  Нет доступных дней для записи")
                 return []
 
-            logger.info(f"📅 Найдено доступных дней: {len(days)}")
+            logger.info(f"YC_GASFS:  Найдено доступных дней: {len(days)}")
 
             # Фильтруем дни по запрашиваемому диапазону если указан
             target_days = []
@@ -706,10 +706,10 @@ class YclientsClient:
                     target_days.append(day)
 
                 except Exception as e:
-                    logger.warning(f"⚠️ Ошибка обработки даты {day}: {e}")
+                    logger.warning(f"YC_GASFS:  Ошибка обработки даты {day}: {e}")
                     continue
 
-            logger.info(f"🎯 Дней в запрашиваемом диапазоне: {len(target_days)}")
+            logger.info(f"YC_GASFS:  Дней в запрашиваемом диапазоне: {len(target_days)}")
 
             # 2. Для каждого доступного дня получаем временные слоты
             for day in target_days:
@@ -717,7 +717,7 @@ class YclientsClient:
                     time_slots = await self.get_available_times(staff_id=staff_id, service_id=service_id, day=day)
                     slots = time_slots['data']
 
-                    logger.info(f"🕐 Слотов для дня {day}: {len(slots)}")
+                    logger.info(f"YC_GASFS:  Слотов для дня {day}: {len(slots)}")
 
                     # 3. Преобразуем в объекты TimeSlot
                     for slot_info in slots:
@@ -747,18 +747,18 @@ class YclientsClient:
                             ))
 
                         except Exception as e:
-                            logger.warning(f"⚠️ Ошибка парсинга слота {slot_info}: {e}")
+                            logger.warning(f"YC_GASFS:  Ошибка парсинга слота {slot_info}: {e}")
                             continue
 
                 except Exception as e:
-                    logger.warning(f"⚠️ Ошибка получения слотов для дня {day}: {e}")
+                    logger.warning(f"YC_GASFS:  Ошибка получения слотов для дня {day}: {e}")
                     continue
 
-            logger.info(f"✅ Найдено {len(available_slots)} доступных слотов")
+            logger.info(f"YC_GASFS:  Найдено {len(available_slots)} доступных слотов")
             return available_slots
 
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка при поиске слотов: {e}")
+            logger.error(f"YC_GASFS:  Критическая ошибка при поиске слотов: {e}")
             return []
 
     # ============================================================================
@@ -785,7 +785,7 @@ class YclientsClient:
         available_slots = []
 
         try:
-            logger.info("🔄 Запрос реальных слотов из proxy endpoint /api/v1/booking/slots...")
+            logger.info("YC_FRAS:  Запрос реальных слотов из proxy endpoint /api/v1/booking/slots...")
 
             async with httpx.AsyncClient(timeout=15.0) as client:
                 url = f"{self.base_url}/api/v1/booking/slots"
@@ -800,20 +800,20 @@ class YclientsClient:
                 if staff_id:
                     request_data["staff_id"] = staff_id
 
-                logger.info(f"🔍 Запрос слотов: {url}")
-                logger.info(f"📋 Параметры: {request_data}")
+                logger.info(f"YC_FRAS:  Запрос слотов: {url}")
+                logger.info(f"YC_FRAS:  Параметры: {request_data}")
 
                 response = await client.post(url, headers=self.headers, json=request_data)
-                logger.info(f"📡 API ответ: статус {response.status_code}")
+                logger.info(f"YC_FRAS:  API ответ: статус {response.status_code}")
 
                 if response.status_code == 200:
                     data = response.json()
-                    logger.info(f"✅ Успешный ответ от booking/slots API")
+                    logger.info(f"YC_FRAS:  Успешный ответ от booking/slots API")
 
                     if isinstance(data, dict) and data.get('success') and 'slots' in data:
                         slots_data = data['slots']
                         total_found = data.get('total_found', 0)
-                        logger.info(f"🎯 Найдено слотов: {len(slots_data)} (всего: {total_found})")
+                        logger.info(f"YC_FRAS:  Найдено слотов: {len(slots_data)} (всего: {total_found})")
 
                         for slot_info in slots_data:
                             try:
@@ -836,26 +836,26 @@ class YclientsClient:
                                         available=is_available
                                     )
                                     available_slots.append(time_slot)
-                                    logger.info(f"✅ Добавлен слот: {start_datetime.strftime('%H:%M')} - {end_datetime.strftime('%H:%M')} для мастера {slot_staff_id}")
+                                    logger.info(f"YC_FRAS:  Добавлен слот: {start_datetime.strftime('%H:%M')} - {end_datetime.strftime('%H:%M')} для мастера {slot_staff_id}")
 
                             except Exception as e:
-                                logger.warning(f"⚠️ Ошибка при обработке слота: {str(e)}")
+                                logger.warning(f"YC_FRAS:  Ошибка при обработке слота: {str(e)}")
                                 continue
 
-                        logger.info(f"✅ Обработано {len(available_slots)} доступных слотов")
+                        logger.info(f"YC_FRAS:  Обработано {len(available_slots)} доступных слотов")
                         return available_slots
                     else:
-                        logger.warning("⚠️ Неожиданная структура ответа booking/slots API")
+                        logger.warning("YC_FRAS:  Неожиданная структура ответа booking/slots API")
                         if isinstance(data, dict):
-                            logger.info(f"Ключи ответа: {list(data.keys())}")
+                            logger.info(f"YC_FRAS: Ключи ответа: {list(data.keys())}")
                         return []
 
                 else:
-                    logger.error(f"❌ Ошибка booking/slots API: {response.status_code} - {response.text}")
+                    logger.error(f"YC_FRAS:  Ошибка booking/slots API: {response.status_code} - {response.text}")
                     return []
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запросе слотов к booking/slots API: {str(e)}")
+            logger.error(f"YC_FRAS:  Ошибка при запросе слотов к booking/slots API: {str(e)}")
             return []
 
 
@@ -880,27 +880,27 @@ class YclientsClient:
         Returns:
             Список доступных временных слотов
         """
-        logger.info(f"🔍 Поиск свободных слотов для услуг {service_ids} "
+        logger.info(f"YC_GAS: Поиск свободных слотов для услуг {service_ids} "
                    f"с {date_from.strftime('%Y-%m-%d')} по {date_to.strftime('%Y-%m-%d')}")
 
         if staff_id:
-            logger.info(f"👤 Поиск для конкретного мастера: {staff_id}")
+            logger.info(f"YC_GAS:  Поиск для конкретного мастера: {staff_id}")
 
         available_slots = []
 
         # Пытаемся получить реальные слоты из API
         if use_real_api:
-            logger.info("🔄 Попытка получить реальные слоты из YClients API...")
+            logger.info("YC_GAS:  Попытка получить реальные слоты из YClients API...")
             real_slots = await self._fetch_real_available_slots(service_ids, date_from, date_to, staff_id)
 
             if real_slots:
-                logger.info(f"✅ Получено {len(real_slots)} реальных слотов")
+                logger.info(f"YC_GAS:  Получено {len(real_slots)} реальных слотов")
                 return real_slots
             else:
-                logger.warning("⚠️ Не удалось получить слоты из реального API, используем мок данные")
+                logger.warning("YC_GAS:  Не удалось получить слоты из реального API, используем мок данные")
 
         # Fallback к мок данным
-        logger.info("🔄 Генерируем мок слоты...")
+        logger.info("YC_GAS:  Генерируем мок слоты...")
 
         # Получаем список мастеров, которые могут выполнить услуги
         services = await self.get_services()
@@ -943,7 +943,7 @@ class YclientsClient:
 
             current_date += timedelta(days=1)
 
-        logger.info(f"✅ Найдено {len(available_slots)} мок слотов")
+        logger.info(f"YC_GAS:  Найдено {len(available_slots)} мок слотов")
         return available_slots
 
     # ============================================================================
@@ -973,7 +973,7 @@ class YclientsClient:
         Returns:
             Данные о созданной брони (record_id, статус)
         """
-        logger.info(f"📝 Создание записи для {fullname} ({phone}) "
+        logger.info(f"YC_CB: Создание записи для {fullname} ({phone}) "
                    f"на {booking_datetime.strftime('%Y-%m-%d %H:%M')}")
 
         # МОКИРОВАННЫЕ ДАННЫЕ - имитируем создание записи
@@ -989,14 +989,14 @@ class YclientsClient:
         service_names = [s.title for s in services if s.id in service_ids]
         staff_name = next((s.name for s in staff_list if s.id == staff_id), f"ID:{staff_id}")
 
-        logger.info(f"✅ Запись создана успешно:")
-        logger.info(f"   📋 ID записи: {record_id}")
-        logger.info(f"   👤 Клиент: {fullname} ({phone})")
-        logger.info(f"   💇 Услуги: {', '.join(service_names)}")
-        logger.info(f"   👨‍💼 Мастер: {staff_name}")
-        logger.info(f"   📅 Время: {booking_datetime.strftime('%Y-%m-%d %H:%M')}")
+        logger.info(f"YC_CB:  Запись создана успешно:")
+        logger.info(f"YC_CB:     ID записи: {record_id}")
+        logger.info(f"YC_CB:     Клиент: {fullname} ({phone})")
+        logger.info(f"YC_CB:     Услуги: {', '.join(service_names)}")
+        logger.info(f"YC_CB:     Мастер: {staff_name}")
+        logger.info(f"YC_CB:     Время: {booking_datetime.strftime('%Y-%m-%d %H:%M')}")
         if comment:
-            logger.info(f"   💬 Комментарий: {comment}")
+            logger.info(f"YC_CB:     Комментарий: {comment}")
 
         return {
             "record_id": record_id,
@@ -1022,14 +1022,14 @@ class YclientsClient:
         Returns:
             Результат операции отмены
         """
-        logger.info(f"❌ Отмена записи {record_id}")
+        logger.info(f"YC_CANB:  Отмена записи {record_id}")
         if reason:
-            logger.info(f"   Причина: {reason}")
+            logger.info(f"YC_CANB:    Причина: {reason}")
 
         # МОКИРОВАННЫЕ ДАННЫЕ - имитируем отмену записи
         # В реальном проекте здесь будет HTTP DELETE/PUT запрос к API
 
-        logger.info(f"✅ Запись {record_id} успешно отменена")
+        logger.info(f"YC_CANB:  Запись {record_id} успешно отменена")
 
         return {
             "record_id": record_id,
@@ -1052,7 +1052,7 @@ class YclientsClient:
         Returns:
             Данные записи или None, если не найдена
         """
-        logger.info(f"🔍 Поиск записи по ID: {record_id}")
+        logger.info(f" Поиск записи по ID: {record_id}")
 
         # МОКИРОВАННЫЕ ДАННЫЕ
         mock_booking = {
@@ -1068,7 +1068,7 @@ class YclientsClient:
             "created_at": "2024-01-15T10:30:00"
         }
 
-        logger.info(f"✅ Запись найдена: {mock_booking['client_name']}")
+        logger.info(f" Запись найдена: {mock_booking['client_name']}")
         return mock_booking
 
     async def get_sales_statistics(self, date_from: datetime, date_to: datetime) -> Dict[str, Any]:
@@ -1082,7 +1082,7 @@ class YclientsClient:
         Returns:
             Статистика продаж за период
         """
-        logger.info(f"📊 Получение статистики с {date_from.strftime('%Y-%m-%d')} "
+        logger.info(f"YC_GSTATS: Получение статистики с {date_from.strftime('%Y-%m-%d')} "
                    f"по {date_to.strftime('%Y-%m-%d')}")
 
         # МОКИРОВАННЫЕ ДАННЫЕ
@@ -1106,7 +1106,7 @@ class YclientsClient:
             ]
         }
 
-        logger.info(f"✅ Статистика получена: {mock_stats['total_bookings']} записей, "
+        logger.info(f"YC_GSTATS: Статистика получена: {mock_stats['total_bookings']} записей, "
                    f"выручка {mock_stats['total_revenue']} руб.")
         return mock_stats
 
@@ -1121,7 +1121,7 @@ class YclientsClient:
         Returns:
             Список клиентов
         """
-        logger.info(f"👥 Получение списка клиентов (limit: {limit}, offset: {offset})")
+        logger.info(f" Получение списка клиентов (limit: {limit}, offset: {offset})")
 
         # МОКИРОВАННЫЕ ДАННЫЕ
         mock_clients = [
@@ -1152,7 +1152,7 @@ class YclientsClient:
         # Применяем limit и offset
         result = mock_clients[offset:offset + limit]
 
-        logger.info(f"✅ Получено {len(result)} клиентов")
+        logger.info(f" Получено {len(result)} клиентов")
         return result
 
     # ============================================================================
