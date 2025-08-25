@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import nest_asyncio
+import os
 import re
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -14,8 +15,9 @@ from config import settings
 from prompts import format_prompt, PromptNames
 from typing import Optional
 
-# Применяем nest_asyncio для решения проблем с event loop
-nest_asyncio.apply()
+# Применяем nest_asyncio для решения проблем с event loop только в локальной среде
+if os.getenv('HEROKU') is None:
+    nest_asyncio.apply()
 
 # Настройка логирования
 logging.basicConfig(
@@ -40,13 +42,13 @@ class SimpleTelegramBot:
         """Обработка команды /start"""
         user = update.effective_user
         welcome_message = f"""
-👋 Добро пожаловать в салон красоты, {user.first_name}!
+Добро пожаловать в салон красоты, {user.first_name}!
 
 Я помогу вам:
-• 📅 Записаться на услуги
-• 💬 Ответить на вопросы о салоне
-• 👩‍💼 Выбрать подходящего мастера
-• ⏰ Найти удобное время
+• Записаться на услуги
+• Ответить на вопросы о салоне
+• Выбрать подходящего мастера
+• Найти удобное время
 
 Просто напишите что вас интересует, например:
 "Хочу записаться на маникюр к Наталье на завтра"
@@ -62,29 +64,29 @@ class SimpleTelegramBot:
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /help"""
         help_text = """
-🤖 Как пользоваться ботом:
+Как пользоваться ботом:
 
-📝 **Запись на услуги:**
+**Запись на услуги:**
 • "Хочу записаться на маникюр"
 • "Запиши меня к Наталье на завтра в 15:00"
 • "Нужен педикюр на пятницу"
 
-❓ **Вопросы о салоне:**
+**Вопросы о салоне:**
 • "Сколько стоит маникюр?"
 • "Какие у вас есть услуги?"
 • "Где находится салон?"
 
-👤 **Профиль:**
+**Профиль:**
 • /profile - посмотреть свой профиль
 • Бот запоминает ваши предпочтения
 
-📞 **Команды:**
+**Команды:**
 • /start - главное меню
 • /services - список услуг
 • /masters - наши мастера
 • /help - эта справка
 
-Просто пишите естественным языком, я пойму! 😊
+Просто пишите естественным языком, я пойму!
         """
         await update.message.reply_text(help_text)
 
@@ -263,7 +265,7 @@ class SimpleTelegramBot:
                         preferred_time_slots=', '.join(getattr(client_db, 'preferred_time_slots', []) or []) or 'нет данных'
                     )
                 except Exception as e:
-                    logger.error(f"❌ Ошибка загрузки промпта: {e}")
+                    logger.error(f"SM_ERR: Ошибка загрузки промпта: {e}")
                     # Fallback к простому промпту без эмодзи
                     system_prompt = """Ты — профессиональный ассистент салона красоты.
 Отвечай коротко и по делу, без эмодзи.
@@ -322,7 +324,14 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        # Используем asyncio.run только если не в Heroku
+        if os.getenv('HEROKU') is None:
+            asyncio.run(main())
+        else:
+            # В Heroku используем простой запуск
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(main())
     except Exception as e:
-        logger.error(f"Ошибка запуска бота: {e}")
+        logger.error(f"SM_MAIN: Ошибка запуска бота: {e}")
         raise
