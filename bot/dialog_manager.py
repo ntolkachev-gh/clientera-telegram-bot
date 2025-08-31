@@ -578,18 +578,31 @@ class DialogManager:
             role = "user" if msg.message_type == "user" else "assistant"
             context_messages.append({"role": role, "content": msg.content})
 
-        # Загружаем системный промпт из файла
+        # Загружаем универсальный системный промпт из файла
         try:
             system_prompt = format_prompt(
-                PromptNames.SALON_RESPONSE_SYSTEM,
+                PromptNames.SALON_UNIVERSAL_SYSTEM,
                 client_name=client_profile['name'] or 'Неизвестно',
                 favorite_services=', '.join(client_profile['favorite_services']) or 'нет данных',
                 favorite_masters=', '.join(client_profile['favorite_masters']) or 'нет данных',
                 preferred_time_slots=', '.join(client_profile['preferred_time_slots']) or 'нет данных'
             )
         except Exception as e:
-            logger.error(f"❌ Ошибка загрузки промпта: {e}")
+            logger.error(f"❌ DM_ERR: Ошибка загрузки универсального промпта: {e}")
+            logger.error(f"❌ DM_ERR: Тип ошибки: {type(e).__name__}")
+            logger.error(f"❌ DM_ERR: Попытка загрузки: PromptNames.SALON_UNIVERSAL_SYSTEM = '{PromptNames.SALON_UNIVERSAL_SYSTEM}'")
+
+            # Проверяем доступность файла
+            import os
+            prompt_file = f"prompts/{PromptNames.SALON_UNIVERSAL_SYSTEM}.txt"
+            logger.error(f"❌ DM_ERR: Проверяем файл: {prompt_file}")
+            logger.error(f"❌ DM_ERR: Файл существует: {os.path.exists(prompt_file)}")
+
+            if os.path.exists(prompt_file):
+                logger.error(f"❌ DM_ERR: Размер файла: {os.path.getsize(prompt_file)} байт")
+
             # Fallback к простому промпту без эмодзи
+            logger.warning("⚠️ DM_WARN: Используем fallback промпт")
             system_prompt = """Ты — профессиональный ассистент салона красоты.
 Отвечай коротко и по делу, без эмодзи.
 Помогай клиенту записаться или получить информацию."""

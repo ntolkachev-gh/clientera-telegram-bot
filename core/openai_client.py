@@ -306,32 +306,35 @@ class OpenAIClient:
                                     use_tools: bool = True) -> Dict[str, Any]:
         """Обработка запроса на запись с учетом профиля клиента"""
 
-        # Если доступны tools, используем их для более точной обработки
+        # Используем универсальный промпт с поддержкой tools
+        logger.info("🔧 Используем универсальный промпт с поддержкой tools")
+
+        try:
+            system_prompt = format_prompt(
+                PromptNames.SALON_UNIVERSAL_SYSTEM,
+                client_name=client_profile.get('name', 'Неизвестно'),
+                favorite_services=', '.join(client_profile.get('favorite_services', []) or []) or 'нет данных',
+                favorite_masters=', '.join(client_profile.get('favorite_masters', []) or []) or 'нет данных',
+                preferred_time_slots=', '.join(client_profile.get('preferred_time_slots', []) or []) or 'нет данных'
+            )
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка: не удалось загрузить системный промпт: {e}")
+            return {
+                "intent": "other",
+                "confidence": 0.0,
+                "response": "Извините, произошла техническая ошибка. Попробуйте позже.",
+                "used_tools": False,
+                "error": "Ошибка загрузки промпта"
+            }
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        # Если доступны tools, используем их
         if use_tools and self.yclients and self.available_tools:
-            logger.info(" Используем tools для обработки запроса на запись")
-
-            try:
-                system_prompt = format_prompt(
-                    PromptNames.SALON_ASSISTANT_SYSTEM,
-                    favorite_services=client_profile.get('favorite_services', []),
-                    favorite_masters=client_profile.get('favorite_masters', []),
-                    preferred_time_slots=client_profile.get('preferred_time_slots', [])
-                )
-            except Exception as e:
-                logger.error(f" Критическая ошибка: не удалось загрузить системный промпт: {e}")
-                return {
-                    "intent": "other",
-                    "confidence": 0.0,
-                    "response": "Извините, произошла техническая ошибка. Попробуйте позже.",
-                    "used_tools": False,
-                    "error": "Ошибка загрузки промпта"
-                }
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
-
+            logger.info("🛠️ Tools доступны, используем chat_completion_with_tools")
             try:
                 response_text = await self.chat_completion_with_tools(
                     messages=messages,
@@ -351,46 +354,28 @@ class OpenAIClient:
                 }
 
             except Exception as e:
-                logger.error(f" Ошибка при использовании tools: {e}")
-                # Fallback к старому методу
+                logger.error(f"❌ Ошибка при использовании tools: {e}")
+                # Fallback к методу без tools
                 use_tools = False
 
-        # Старый метод без tools
+        # Метод без tools (fallback)
         logger.info("📝 Используем стандартный анализ запроса без tools")
 
-        # Добавляем список услуг, известный боту (если передан)
-        services_list_text = ", ".join(available_services) if available_services else "неизвестно"
-
-        try:
-            prompt = format_prompt(
-                PromptNames.BOOKING_ANALYSIS,
-                user_message=user_message,
-                favorite_services=client_profile.get('favorite_services', []),
-                favorite_masters=client_profile.get('favorite_masters', []),
-                preferred_time_slots=client_profile.get('preferred_time_slots', []),
-                services_list=services_list_text
-            )
-        except Exception as e:
-            logger.error(f" Критическая ошибка: не удалось загрузить промпт для анализа бронирования: {e}")
-            return {
-                "intent": "other",
-                "confidence": 0.0,
-                "response": "Извините, произошла техническая ошибка. Попробуйте позже.",
-                "error": "Ошибка загрузки промпта"
-            }
+        # Fallback: используем тот же универсальный промпт, но без tools
+        logger.info("📝 Fallback: используем универсальный промпт без tools")
 
         try:
             # Параметры для разных моделей
             if settings.openai_default_model.startswith("gpt-5"):
                 response = self.client.chat.completions.create(
                     model=settings.openai_default_model,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     timeout=OPENAI_TIMEOUTS["request_timeout"]
                 )
             else:
                 response = self.client.chat.completions.create(
                     model=settings.openai_default_model,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     max_tokens=500,
                     temperature=0.3,
                     timeout=OPENAI_TIMEOUTS["request_timeout"]
@@ -401,18 +386,24 @@ class OpenAIClient:
             self._log_usage(
                 client_id=client_profile.get('id'),
                 model=settings.openai_default_model,
-                purpose="booking_analysis",
+                purpose="universal_prompt_fallback",
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
                 total_tokens=usage.total_tokens
             )
 
-            result = json.loads(response.choices[0].message.content)
+            response_text = response.choices[0].message.content.strip()
 
-            # Добавляем логирование для отладки
-            logger.info(f" Анализ запроса: '{user_message}' -> intent: {result.get('intent')}")
+            # Определяем intent на основе ответа
+            intent = "booking" if any(keyword in user_message.lower() for keyword in
+                ["записаться", "запись", "хочу записаться", "записаться на", "записаться к"]) else "question"
 
-            return result
+            return {
+                "intent": intent,
+                "confidence": 0.7,
+                "response": response_text,
+                "used_tools": False
+            }
 
         except Exception as e:
             logger.error(f" Ошибка при обработке запроса на запись: {e}")

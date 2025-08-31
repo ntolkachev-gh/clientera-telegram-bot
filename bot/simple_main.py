@@ -255,18 +255,31 @@ class SimpleTelegramBot:
                 recent_messages = db.query(Message).filter(
                     Message.client_id == client_db.id
                 ).order_by(Message.created_at.desc()).limit(10).all()
-                # Загружаем системный промпт из файла
+                # Загружаем универсальный системный промпт из файла
                 try:
                     system_prompt = format_prompt(
-                        PromptNames.SALON_RESPONSE_SYSTEM,
+                        PromptNames.SALON_UNIVERSAL_SYSTEM,
                         client_name=client_db.first_name or 'Неизвестно',
                         favorite_services=', '.join(getattr(client_db, 'favorite_services', []) or []) or 'нет данных',
                         favorite_masters=', '.join(getattr(client_db, 'favorite_masters', []) or []) or 'нет данных',
                         preferred_time_slots=', '.join(getattr(client_db, 'preferred_time_slots', []) or []) or 'нет данных'
                     )
                 except Exception as e:
-                    logger.error(f"SM_ERR: Ошибка загрузки промпта: {e}")
+                    logger.error(f"SM_ERR: Ошибка загрузки универсального промпта: {e}")
+                    logger.error(f"SM_ERR: Тип ошибки: {type(e).__name__}")
+                    logger.error(f"SM_ERR: Попытка загрузки: PromptNames.SALON_UNIVERSAL_SYSTEM = '{PromptNames.SALON_UNIVERSAL_SYSTEM}'")
+
+                    # Проверяем доступность файла
+                    import os
+                    prompt_file = f"prompts/{PromptNames.SALON_UNIVERSAL_SYSTEM}.txt"
+                    logger.error(f"SM_ERR: Проверяем файл: {prompt_file}")
+                    logger.error(f"SM_ERR: Файл существует: {os.path.exists(prompt_file)}")
+
+                    if os.path.exists(prompt_file):
+                        logger.error(f"SM_ERR: Размер файла: {os.path.getsize(prompt_file)} байт")
+
                     # Fallback к простому промпту без эмодзи
+                    logger.warning("SM_WARN: Используем fallback промпт")
                     system_prompt = """Ты — профессиональный ассистент салона красоты.
 Отвечай коротко и по делу, без эмодзи.
 Помогай клиенту записаться или получить информацию."""
