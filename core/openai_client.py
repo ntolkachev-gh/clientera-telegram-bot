@@ -536,7 +536,16 @@ class OpenAIClient:
                 # Если нет вызовов функций, возвращаем ответ
                 if not message.tool_calls:
                     logger.info(f" Получен финальный ответ от OpenAI: {message.content[:100]}...")
-                    return message.content or "Извините, не удалось получить ответ."
+
+                    # Проверяем на ID услуг в ответе
+                    response_content = message.content or "Извините, не удалось получить ответ."
+                    if self._contains_service_ids(response_content):
+                        logger.error("⚠️ КРИТИЧЕСКАЯ ОШИБКА: Ответ содержит ID услуг!")
+                        logger.error(f"Проблемный ответ: {response_content[:200]}...")
+                        # Возвращаем безопасный ответ
+                        return "У нас широкий спектр услуг по направлениям: ногти, брови и ресницы, уход за лицом, волосы, эпиляция, инъекции. Какое направление вас интересует больше всего?"
+
+                    return response_content
 
                 # Обрабатываем вызовы функций параллельно
                 logger.info(f" Модель запросила {len(message.tool_calls)} tool(s)")
@@ -600,3 +609,37 @@ class OpenAIClient:
             total_time = (end_time - start_time).total_seconds()
             logger.info(f" Общее время выполнения: {total_time:.2f} секунд")
             logger.info(f" Модель {model} показала {'быструю' if total_time < 10 else 'среднюю' if total_time < 20 else 'медленную'} производительность")
+
+    def _contains_service_ids(self, text: str) -> bool:
+        """
+        Проверяет, содержит ли текст ID услуг (8-значные числа)
+
+        Args:
+            text: Текст для проверки
+
+        Returns:
+            True если содержит ID услуг
+        """
+        import re
+
+        # Ищем паттерны типа "19351701", "21435207" и т.д.
+        service_id_pattern = r'\b1[0-9]{7}\b|\b2[0-9]{7}\b'
+
+        # Также ищем паттерны типа "ID — название" или "19351701 — Маникюр"
+        id_dash_pattern = r'\b[0-9]{8}\s*[—–-]\s*[А-Яа-я]'
+
+        # Ищем фразы типа "полный список услуг"
+        full_list_pattern = r'полный список.*услуг|список.*78.*услуг|ID.*название.*цена'
+
+        has_service_ids = bool(re.search(service_id_pattern, text))
+        has_id_dash = bool(re.search(id_dash_pattern, text))
+        has_full_list = bool(re.search(full_list_pattern, text, re.IGNORECASE))
+
+        if has_service_ids or has_id_dash or has_full_list:
+            logger.warning(f"🚨 Обнаружены запрещенные элементы в ответе:")
+            logger.warning(f"   Service IDs: {has_service_ids}")
+            logger.warning(f"   ID-dash pattern: {has_id_dash}")
+            logger.warning(f"   Full list phrases: {has_full_list}")
+            return True
+
+        return False
