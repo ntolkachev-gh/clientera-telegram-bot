@@ -4,6 +4,7 @@
 import logging
 import json
 import re
+import aiohttp
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from bot.embedding import EmbeddingService
@@ -26,14 +27,14 @@ class YclientsToolsDefinition:
         """
         logger.info("YTD_GTS: Формирование схем tools для OpenAI Function Calling")
         logger.info("YTD_GTS: Создаем схемы для следующих tools:")
-        logger.info("YTD_GTS:   get_services - получение списка услуг")
+        logger.info("YTD_GTS:   get_services - получение списка услуг из Youclients API")
         logger.info("YTD_GTS:   get_staff - получение списка мастеров")
         logger.info("YTD_GTS:   find_service_by_name - поиск услуги по названию")
         logger.info("YTD_GTS:   find_staff_by_name - поиск мастера по имени")
         logger.info("YTD_GTS:   get_available_slots - получение свободных слотов")
         logger.info("YTD_GTS:   get_available_days - получение доступных дней")
         logger.info("YTD_GTS:   get_available_times - получение временных слотов")
-        logger.info("YTD_GTS:   create_booking - создание записи")
+        logger.info("YTH_GTS:   create_booking - создание записи")
 
         tools = [
             YclientsToolsDefinition._get_services_tool(),
@@ -58,7 +59,7 @@ class YclientsToolsDefinition:
             "type": "function",
             "function": {
                 "name": "get_services",
-                "description": "Получить список доступных услуг салона красоты с ценами и длительностью",
+                "description": "Получить актуальный список доступных услуг салона красоты с ценами и длительностью из Youclients API",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -309,18 +310,18 @@ class YclientsToolsHandler:
     # ============================================================================
 
     async def handle_get_services(self, **kwargs) -> Dict[str, Any]:
-        """Tool handler: получить полный список услуг из базы знаний Qdrant"""
+        """Tool handler: получить полный список услуг из Youclients Proxy API"""
         logger.info("YTH_HGS: Обработка tool: get_services")
         logger.info(f"YTH_HGS: Параметры вызова: {kwargs}")
         logger.info(f"YTH_HGS: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
-            logger.info("YTH_HGS: Получение всех услуг из Qdrant...")
+            logger.info("YTH_HGS: Получение всех услуг из Youclients Proxy API...")
 
-            # Получаем все точки с категорией "services" из Qdrant
-            services = await self._get_all_services_from_qdrant()
+            # Получаем услуги из API
+            services = await self._get_services_from_api()
 
-            logger.info(f"YTH_HGS: Найдено {len(services)} услуг в базе знаний")
+            logger.info(f"YTH_HGS: Найдено {len(services)} услуг в API")
             logger.info(f"YTH_HGS: Успешно обработано {len(services)} услуг")
 
             if services:
@@ -339,68 +340,52 @@ class YclientsToolsHandler:
             logger.error(f"YTH_HGS: Полная информация об ошибке: {str(e)}", exc_info=True)
             return {"error": str(e), "success": False}
 
-    async def _get_all_services_from_qdrant(self) -> List[Dict[str, Any]]:
-        """Получить все услуги из Qdrant, используя scroll для получения всех записей"""
+    async def _get_services_from_api(self) -> List[Dict[str, Any]]:
+        """Получить все услуги из Youclients Proxy API"""
         try:
-            logger.info("YTH_GASQ: Начало получения всех услуг из Qdrant")
-            # Используем scroll для получения всех точек с категорией services
-            scroll_request = {
-                "collection_name": self.embedding_service.collection_name,
-                "scroll_filter": {
-                    "must": [
-                        {"key": "category", "match": {"value": "services"}}
-                    ]
-                },
-                "limit": 1000,
-                "with_payload": True,
-                "with_vectors": False
-            }
-            logger.info(f"YTH_GASQ: Параметры запроса scroll: {json.dumps(scroll_request, ensure_ascii=False, indent=2)}")
+            logger.info("YTH_GSA: Начало получения услуг из Youclients Proxy API")
 
-            scroll_result = self.embedding_service.qdrant_client.scroll(
-                collection_name=scroll_request["collection_name"],
-                scroll_filter=scroll_request["scroll_filter"],
-                limit=scroll_request["limit"],
-                with_payload=scroll_request["with_payload"],
-                with_vectors=scroll_request["with_vectors"]
-            )
+            # URL для получения услуг
+            api_url = "https://clientera-yclients-proxy-7fb108aebb90.herokuapp.com/api/v1/services"
 
-            points = scroll_result[0]  # Список точек
-            logger.info(f"YTH_GASQ: Получено {len(points)} точек из Qdrant")
-            services = []
+            logger.info(f"YTH_GSA: Отправляем запрос к API: {api_url}")
 
-            for point in points:
-                payload = point.payload
-                content = payload.get("content", "")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.info(f"YTH_GSA: Получен ответ от API, статус: {response.status}")
 
-                # Парсим услуги из контента
-                parsed_services = self._parse_services_from_content(
-                    content=content,
-                    category=payload.get("filename", "Общие"),
-                    specialist=payload.get("specialist"),
-                    has_prices=payload.get("has_prices", False),
-                    price_range=payload.get("price_range", {})
-                )
+                        if data.get("success") and "services" in data:
+                            services = data["services"]
+                            logger.info(f"YTH_GSA: Успешно получено {len(services)} услуг из API")
 
-                services.extend(parsed_services)
+                            # Преобразуем данные в нужный формат
+                            formatted_services = []
+                            for service in services:
+                                formatted_service = {
+                                    "id": service.get("id"),
+                                    "title": service.get("title"),
+                                    "price": service.get("price"),
+                                    "price_display": service.get("price_display"),
+                                    "duration": service.get("duration"),
+                                    "category": service.get("category"),
+                                    "specialist": service.get("specialist"),
+                                    "description": service.get("description")
+                                }
+                                formatted_services.append(formatted_service)
 
-            # Убираем дубликаты по названию услуги
-            unique_services = {}
-            for service in services:
-                service_key = service["title"].lower().strip()
-                if service_key not in unique_services:
-                    unique_services[service_key] = service
-                else:
-                    # Если услуга уже есть, обновляем информацию если новая более полная
-                    existing = unique_services[service_key]
-                    if service.get("price", 0) > 0 and existing.get("price", 0) == 0:
-                        unique_services[service_key] = service
-
-            return list(unique_services.values())
+                            return formatted_services
+                        else:
+                            logger.error(f"YTH_GSA: API вернул неуспешный ответ: {data}")
+                            raise Exception(f"API вернул неуспешный ответ: {data}")
+                    else:
+                        logger.error(f"YTH_GSA: HTTP ошибка: {response.status}")
+                        raise Exception(f"HTTP ошибка при получении услуг: {response.status}")
 
         except Exception as e:
-            logger.error(f"YTH_GASQ: Ошибка при получении услуг из Qdrant: {e}")
-            logger.error(f"YTH_GASQ: Полная информация об ошибке: {str(e)}", exc_info=True)
+            logger.error(f"YTH_GSA: Ошибка при получении услуг из API: {e}")
+            logger.error(f"YTH_GTS: Полная информация об ошибке: {str(e)}", exc_info=True)
             raise
 
     def _parse_services_from_content(self, content: str, category: str,
@@ -1168,7 +1153,7 @@ class YclientsToolsHandler:
                 service_names = []
                 if service_ids:
                     # Получаем реальные названия услуг
-                    services_data = await self._get_all_services_from_qdrant()
+                    services_data = await self._get_services_from_api()
                     services_dict = {s.get('id'): s.get('title', f'Услуга #{s.get("id")}') for s in services_data}
 
                     for service_id in service_ids:
