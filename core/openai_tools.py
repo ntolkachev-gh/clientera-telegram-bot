@@ -30,8 +30,7 @@ class YclientsToolsDefinition:
         logger.info("YTD_GTS:   get_services - получение списка услуг для клиента (без ID)")
         logger.info("YTD_GTS:   get_services_with_id - получение списка услуг с ID для записи")
         logger.info("YTD_GTS:   get_staff - получение списка мастеров")
-        logger.info("YTD_GTS:   find_service_by_name - поиск услуги по названию")
-        logger.info("YTD_GTS:   find_staff_by_name - поиск мастера по имени")
+
         logger.info("YTD_GTS:   get_available_slots - получение свободных слотов")
         logger.info("YTD_GTS:   get_available_days - получение доступных дней")
         logger.info("YTD_GTS:   get_available_times - получение временных слотов")
@@ -41,8 +40,6 @@ class YclientsToolsDefinition:
             YclientsToolsDefinition._get_services_tool(),
             YclientsToolsDefinition._get_services_with_id_tool(),
             YclientsToolsDefinition._get_staff_tool(),
-            YclientsToolsDefinition._find_service_by_name_tool(),
-            YclientsToolsDefinition._find_staff_by_name_tool(),
             YclientsToolsDefinition._get_available_slots_tool(),
             YclientsToolsDefinition._get_available_days_tool(),
             YclientsToolsDefinition._get_available_times_tool(),
@@ -102,47 +99,7 @@ class YclientsToolsDefinition:
             }
         }
 
-    @staticmethod
-    def _find_service_by_name_tool() -> Dict[str, Any]:
-        """Схема tool для поиска услуги по названию"""
-        return {
-            "type": "function",
-            "function": {
-                "name": "find_service_by_name",
-                "description": "Найти услугу по названию (поддерживает нечеткий поиск)",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "service_name": {
-                            "type": "string",
-                            "description": "Название услуги для поиска"
-                        }
-                    },
-                    "required": ["service_name"]
-                }
-            }
-        }
 
-    @staticmethod
-    def _find_staff_by_name_tool() -> Dict[str, Any]:
-        """Схема tool для поиска мастера по имени"""
-        return {
-            "type": "function",
-            "function": {
-                "name": "find_staff_by_name",
-                "description": "Найти мастера по имени",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "staff_name": {
-                            "type": "string",
-                            "description": "Имя мастера для поиска"
-                        }
-                    },
-                    "required": ["staff_name"]
-                }
-            }
-        }
 
     @staticmethod
     def _get_available_slots_tool() -> Dict[str, Any]:
@@ -313,8 +270,6 @@ class YclientsToolsHandler:
             "get_services": self.handle_get_services,
             "get_services_with_id": self.handle_get_services_with_id,
             "get_staff": self.handle_get_staff,
-            "find_service_by_name": self.handle_find_service_by_name,
-            "find_staff_by_name": self.handle_find_staff_by_name,
             "get_available_slots": self.handle_get_available_slots,
             "get_available_days": self.handle_get_available_days,
             "get_available_times": self.handle_get_available_times,
@@ -695,338 +650,47 @@ class YclientsToolsHandler:
         return category_map.get(clean_category, clean_category.replace('_', ' ').title())
 
     async def handle_get_staff(self, **kwargs) -> Dict[str, Any]:
-        """Tool handler: получить список мастеров из базы знаний Qdrant"""
+        """Tool handler: получить список мастеров из YClients API"""
         logger.info("YTH_HGT: Обработка tool: get_staff")
         logger.info(f"YTH_HGT: Параметры вызова: {kwargs}")
-        logger.info(f"YTH_HGT: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
-            logger.info("YTH_HGT: Поиск мастеров в базе знаний Qdrant...")
+            logger.info("YTH_HGT: Получение списка мастеров из YClients API...")
 
-            # Получаем точки с категорией "specialists" напрямую из Qdrant без embeddings
-            try:
-                scroll_result = self.embedding_service.qdrant_client.scroll(
-                    collection_name=self.embedding_service.collection_name,
-                    scroll_filter={
-                        "must": [
-                            {"key": "category", "match": {"value": "specialists"}}
-                        ]
-                    },
-                    limit=100,
-                    with_payload=True,
-                    with_vectors=False
-                )
-                search_results = scroll_result[0]
-                logger.info(f"YTH_HGT: Найдено {len(search_results)} точек с категорией specialists")
-            except Exception as e:
-                logger.warning(f"YTH_HGT: Ошибка при поиске по категории, пробуем семантический поиск: {e}")
-                logger.warning(f"YTH_HGT: Полная информация об ошибке: {str(e)}", exc_info=True)
-                # Fallback на семантический поиск если не работает фильтр
-                search_results = await self.embedding_service.search_similar(
-                    query="Севиль Бамматова Джамиля Хункаева Мадина Багатырова специалисты команда мастера",
-                    limit=10
-                )
+            # Получаем список мастеров через YClients API
+            if not self.yclients:
+                logger.error("YTH_HGT: YClients клиент недоступен")
+                return {"error": "YClients клиент недоступен", "success": False}
 
-            staff_list = []
-            processed_staff = set()  # Для исключения дубликатов
+            # Получаем мастеров через API
+            staff_list = await self.yclients.get_staff(force_refresh=True, use_real_api=True)
 
-            for result in search_results:
-                content = result.payload.get("content", "")
-                full_text = result.payload.get("full_text", "")
+            # Преобразуем в формат для ответа
+            staff_response = []
+            for staff in staff_list:
+                if hasattr(staff, 'id'):  # Если это объект Staff
+                    staff_response.append({
+                        "id": staff.id,
+                        "name": staff.name,
+                        "specialization": staff.specialization
+                    })
+                else:  # Если это словарь
+                    staff_response.append({
+                        "id": staff.get("id"),
+                        "name": staff.get("name"),
+                        "specialization": staff.get("specialization")
+                    })
 
-                # Используем full_text если content пустой
-                text_to_parse = content if content else full_text
+            logger.info(f"YTH_HGT: Найдено {len(staff_response)} мастеров в API")
+            logger.info(f"YTH_HGT: Полный список сотрудников: {json.dumps(staff_response, ensure_ascii=False, indent=2)}")
 
-                if not text_to_parse:
-                    logger.warning("YTH_HGT: Пустой контент в результате поиска")
-                    continue
-
-                # Парсим мастеров из контента
-                staff_lines = text_to_parse.split('\n')
-
-                # Список известных имен мастеров для фильтрации
-                known_staff_names = ['Севиль Бамматова', 'Джамиля Хункаева', 'Мадина Багатырова']
-
-                for line in staff_lines:
-                    line = line.strip()
-
-                    # Ищем заголовки с именами мастеров (формат: ### Имя Фамилия)
-                    if line.startswith('### '):
-                        name = line.replace('### ', '').strip()
-                        # Проверяем, что это действительно имя мастера
-                        if name in known_staff_names and name not in processed_staff:
-                            processed_staff.add(name)
-                            staff_list.append({
-                                "id": len(staff_list) + 1,
-                                "name": name,
-                                "specialization": "Специалист"  # Базовая специализация
-                            })
-
-                    # Ищем строки со специализацией (формат: **Специализация:** Название)
-                    elif '**Специализация:**' in line:
-                        specialization = line.split('**Специализация:**', 1)[1].strip()
-                        # Обновляем специализацию последнего добавленного мастера
-                        if staff_list:
-                            staff_list[-1]["specialization"] = specialization
-
-                    # Дополнительно ищем в формате списка (- **Имя** — специализация)
-                    elif line.startswith('- **') and '**' in line and '—' in line:
-                        parts = line.split('**')
-                        if len(parts) >= 3:
-                            name = parts[1].strip()
-                            if name in known_staff_names and name not in processed_staff:
-                                processed_staff.add(name)
-                                # Извлекаем специализацию после —
-                                rest = line.split('—', 1)
-                                specialization = rest[1].strip() if len(rest) > 1 else "Специалист"
-                                staff_list.append({
-                                    "id": len(staff_list) + 1,
-                                    "name": name,
-                                    "specialization": specialization
-                                })
-
-            logger.info(f"YTH_HGT: Найдено {len(staff_list)} мастеров в базе знаний")
-            logger.info(f"YTH_HGT: Успешно обработано {len(staff_list)} мастеров")
-            logger.info(f"YTH_HGT: Первые 3 мастера: {staff_list[:3] if len(staff_list) > 3 else staff_list}")
-            logger.info(f"YTH_HGT: Полный список сотрудников: {json.dumps(staff_list, ensure_ascii=False, indent=2)}")
-
-            return {"staff": staff_list, "success": True}
+            return {"staff": staff_response, "success": True}
         except Exception as e:
             logger.error(f"YTH_HGT: Ошибка в tool get_staff: {e}")
-            logger.error(f"YTH_HGT: Тип ошибки: {type(e).__name__}")
             logger.error(f"YTH_HGT: Полная информация об ошибке: {str(e)}", exc_info=True)
             return {"error": str(e), "success": False}
 
-    async def handle_find_service_by_name(self, service_name: str, **kwargs) -> Dict[str, Any]:
-        """Tool handler: найти услугу по названию в базе знаний Qdrant"""
-        logger.info(f"YTH_HFSBN: Обработка tool: find_service_by_name('{service_name}')")
-        logger.info(f"YTH_HFSBN: Параметры вызова: service_name='{service_name}', kwargs={kwargs}")
-        logger.info(f"YTH_HFSBN: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
-        try:
-            logger.info(f"YTH_HFSBN: Ищем услугу '{service_name}' в базе знаний Qdrant...")
-
-            # Сначала используем семантический поиск через embeddings
-            search_results = []
-
-            try:
-                logger.info(f"YTH_HFSBN: Выполняем семантический поиск для '{service_name}'...")
-                search_results = await self.embedding_service.search_similar(
-                    query=f"услуга {service_name} цена стоимость длительность",
-                    limit=10
-                )
-                logger.info(f"YTH_HFSBN: Найдено {len(search_results)} результатов через семантический поиск")
-            except Exception as e:
-                logger.warning(f"YTH_HFSBN: Ошибка при семантическом поиске: {e}")
-                logger.warning(f"YTH_HFSBN: Полная информация об ошибке: {str(e)}", exc_info=True)
-
-            # Если семантический поиск не дал результатов, используем fallback через scroll
-            if not search_results:
-                logger.info("YTH_HFSBN:  Семантический поиск не дал результатов, пробуем поиск через scroll...")
-                service_categories = ["services", "pricing", "cosmetology", "hair", "manicure", "eyebrows", "eyelashes", "depilation", "injections", "other"]
-
-                try:
-                    for category in service_categories:
-                        scroll_result = self.embedding_service.qdrant_client.scroll(
-                            collection_name=self.embedding_service.collection_name,
-                            scroll_filter={
-                                "must": [
-                                    {"key": "category", "match": {"value": category}}
-                                ]
-                            },
-                            limit=100,
-                            with_payload=True,
-                            with_vectors=False
-                        )
-                        # Фильтруем результаты по названию услуги
-                        for point in scroll_result[0]:
-                            content = point.payload.get("content", "")
-                            if service_name.lower() in content.lower():
-                                # Создаем объект с атрибутом score для совместимости
-                                from types import SimpleNamespace
-                                point_with_score = SimpleNamespace(
-                                    payload=point.payload,
-                                    score=0.9  # Фиктивный score для локального поиска
-                                )
-                                search_results.append(point_with_score)
-                                if len(search_results) >= 5:
-                                    break
-                        if len(search_results) >= 5:
-                            break
-
-                    logger.info(f"YTH_HFSBN:  Найдено {len(search_results)} результатов через scroll")
-                except Exception as e:
-                    logger.warning(f"YTH_HFSBN:  Ошибка при поиске через scroll: {e}")
-                    search_results = []
-
-            best_match = None
-            best_score = 0
-
-            for result in search_results:
-                content = result.payload.get("content", "")
-                score = result.score
-
-                logger.info(f"YTH_HFSBN:  Анализируем результат со score {score:.3f}")
-
-                # Улучшенный поиск услуги в контенте - ищем как точное совпадение, так и частичное
-                service_found = False
-                service_title = service_name
-
-                # Проверяем точное совпадение
-                if service_name.lower() in content.lower():
-                    service_found = True
-                else:
-                    # Проверяем частичное совпадение по словам
-                    service_words = service_name.lower().split()
-                    content_lower = content.lower()
-                    matching_words = sum(1 for word in service_words if word in content_lower)
-                    if matching_words >= len(service_words) * 0.5:  # Минимум 50% слов должны совпадать
-                        service_found = True
-
-                if service_found:
-                    logger.info(f"YTH_HFSBN:  Услуга найдена в контенте")
-
-                    # Улучшенный поиск цены и длительности
-                    parsed_service = self._parse_service_from_content(content, service_name)
-
-                    if parsed_service and parsed_service.get("price", 0) > 0:
-                        logger.info(f"YTH_HFSBN:  Найдена цена: {parsed_service['price']} ₽")
-                        best_match = {
-                            "id": hash(service_name) % 10000,
-                            "title": parsed_service["title"],
-                            "price": parsed_service["price"],
-                            "price_display": f"{parsed_service['price']} ₽",
-                            "duration": parsed_service["duration"],
-                            "category": self._normalize_category_name(result.payload.get("file_path", "Общие")),
-                            "description": parsed_service.get("description", "")
-                        }
-                        best_score = score
-                        break
-                    elif score > best_score:
-                        # Если цена не найдена, но услуга упоминается
-                        duration = self._estimate_service_duration(service_name, result.payload.get("file_path", ""))
-                        best_match = {
-                            "id": hash(service_name) % 10000,
-                            "title": service_name,
-                            "price": 0,
-                            "price_display": "Цена по запросу",
-                            "duration": duration,
-                            "category": self._normalize_category_name(result.payload.get("file_path", "Общие")),
-                            "description": ""
-                        }
-                        best_score = score
-
-            if best_match:
-                logger.info(f"YTH_HFSBN:  Tool find_service_by_name: найдена услуга '{best_match['title']}'")
-                logger.info(f"YTH_HFSBN:  Детали услуги: {best_match}")
-                return {"service": best_match, "found": True, "success": True}
-            else:
-                logger.info(f"YTH_HFSBN:  Tool find_service_by_name: услуга '{service_name}' не найдена")
-                return {"service": None, "found": False, "success": True}
-        except Exception as e:
-            logger.error(f"YTH_HFSBN:  Ошибка в tool find_service_by_name: {e}")
-            logger.error(f"YTH_HFSBN:  Тип ошибки: {type(e).__name__}")
-            return {"error": str(e), "success": False}
-
-    async def handle_find_staff_by_name(self, staff_name: str, **kwargs) -> Dict[str, Any]:
-        """Tool handler: найти мастера по имени в базе знаний Qdrant"""
-        logger.info(f"YTH_HFSN: Обработка tool: find_staff_by_name('{staff_name}')")
-        logger.info(f"YTH_HFSN: Параметры вызова: staff_name='{staff_name}', kwargs={kwargs}")
-        logger.info(f"YTH_HFSN: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
-
-        # Проверяем на пустое имя
-        if not staff_name or not staff_name.strip():
-            logger.info("YTH_HFSN:  Пустое имя мастера, возвращаем пустой результат")
-            return {"staff": None, "found": False, "success": True}
-
-        try:
-            logger.info(f"YTH_HFSN:  Ищем мастера '{staff_name}' в базе знаний Qdrant...")
-
-            # Сначала пробуем найти без embeddings через scroll с фильтром по категории specialists
-            search_results = []
-
-            try:
-                scroll_result = self.embedding_service.qdrant_client.scroll(
-                    collection_name=self.embedding_service.collection_name,
-                    scroll_filter={
-                        "must": [
-                            {"key": "category", "match": {"value": "specialists"}}
-                        ]
-                    },
-                    limit=100,
-                    with_payload=True,
-                    with_vectors=False
-                )
-
-                # Фильтруем результаты по имени мастера
-                for point in scroll_result[0]:
-                    content = point.payload.get("content", "")
-                    if staff_name.lower() in content.lower():
-                        # Создаем объект с атрибутом score для совместимости
-                        from types import SimpleNamespace
-                        point_with_score = SimpleNamespace(
-                            payload=point.payload,
-                            score=0.9  # Фиктивный score для локального поиска
-                        )
-                        search_results.append(point_with_score)
-                        if len(search_results) >= 5:
-                            break
-
-                logger.info(f"YTH_HFSN:  Найдено {len(search_results)} результатов без embeddings")
-            except Exception as e:
-                logger.warning(f"YTH_HFSN:  Ошибка при поиске без embeddings, пробуем семантический поиск: {e}")
-                # Fallback на семантический поиск
-                search_results = await self.embedding_service.search_similar(
-                    query=f"мастер {staff_name} специализация услуги",
-                    limit=5
-                )
-
-            best_match = None
-            best_score = 0
-
-            for result in search_results:
-                content = result.payload.get("content", "")
-                score = result.score
-
-                # Ищем упоминание мастера в контенте
-                if staff_name.lower() in content.lower():
-                    # Пытаемся найти специализацию
-                    lines = content.split('\n')
-                    for line in lines:
-                        if staff_name.lower() in line.lower():
-                            # Извлекаем специализацию из строки
-                            if '-' in line:
-                                parts = line.split('-', 1)
-                                if len(parts) == 2:
-                                    specialization = parts[1].strip()
-                                    best_match = {
-                                        "id": hash(staff_name) % 10000,  # Генерируем стабильный ID
-                                        "name": staff_name,
-                                        "specialization": specialization
-                                    }
-                                    best_score = score
-                                    break
-
-                    if not best_match and score > best_score:
-                        # Если специализация не найдена, но мастер упоминается
-                        best_match = {
-                            "id": hash(staff_name) % 10000,
-                            "name": staff_name,
-                            "specialization": "Универсальный мастер"
-                        }
-                        best_score = score
-
-            if best_match:
-                logger.info(f"YTH_HFSN:  Tool find_staff_by_name: найден мастер '{best_match['name']}'")
-                logger.info(f"YTH_HFSN:  Детали мастера: {best_match}")
-                return {"staff": best_match, "found": True, "success": True}
-            else:
-                logger.info(f"YTH_HFSN:  Tool find_staff_by_name: мастер '{staff_name}' не найден")
-                return {"staff": None, "found": False, "success": True}
-        except Exception as e:
-            logger.error(f"YTH_HFSN:  Ошибка в tool find_staff_by_name: {e}")
-            logger.error(f"YTH_HFSN:  Тип ошибки: {type(e).__name__}")
-            return {"error": str(e), "success": False}
 
     async def handle_get_available_slots(self, service_ids: List[int], date_from: str,
                                        date_to: str, staff_id: Optional[int] = None, **kwargs) -> Dict[str, Any]:
@@ -1140,39 +804,343 @@ class YclientsToolsHandler:
             logger.error(f"YTH_GAM:  Ошибка при получении альтернативных мастеров: {e}")
             return []
 
+    def _validate_service_ids(self, service_ids: List[int]) -> Dict[str, Any]:
+        """
+        Валидация service_ids
+
+        Returns:
+            {"valid": bool, "error": str} - результат валидации
+        """
+        if not service_ids:
+            return {"valid": False, "error": "service_ids не может быть пустым"}
+
+        if not isinstance(service_ids, list):
+            return {"valid": False, "error": f"service_ids должен быть списком, получен {type(service_ids)}"}
+
+        # Проверяем что все элементы - целые числа
+        for i, service_id in enumerate(service_ids):
+            if not isinstance(service_id, int):
+                return {"valid": False, "error": f"service_ids[{i}] должен быть целым числом, получен {type(service_id)}: {service_id}"}
+
+            if service_id <= 0:
+                return {"valid": False, "error": f"service_ids[{i}] должен быть больше 0, получен: {service_id}"}
+
+            # Проверяем что ID похож на реальный YClients ID (обычно 8-значные)
+            if service_id < 1000000:  # Меньше 7 цифр - подозрительно
+                logger.warning(f"YTH_VSI: Подозрительный service_id {service_id} - слишком маленький для YClients")
+
+        # Проверяем разумное количество услуг (не больше 10 за раз)
+        if len(service_ids) > 10:
+            return {"valid": False, "error": f"Слишком много услуг за раз: {len(service_ids)}, максимум 10"}
+
+        return {"valid": True, "error": None}
+
+    def _validate_staff_id(self, staff_id: int) -> Dict[str, Any]:
+        """
+        Валидация staff_id
+
+        Returns:
+            {"valid": bool, "error": str} - результат валидации
+        """
+        if not isinstance(staff_id, int):
+            return {"valid": False, "error": f"staff_id должен быть целым числом, получен {type(staff_id)}: {staff_id}"}
+
+        if staff_id <= 0:
+            return {"valid": False, "error": f"staff_id должен быть больше 0, получен: {staff_id}"}
+
+        # Проверяем что ID похож на реальный YClients ID
+        if staff_id < 1000000:  # Меньше 7 цифр - подозрительно
+            logger.warning(f"YTH_VSI: Подозрительный staff_id {staff_id} - слишком маленький для YClients")
+
+        return {"valid": True, "error": None}
+
+    def _validate_booking_datetime(self, booking_datetime: str) -> Dict[str, Any]:
+        """
+        Валидация booking_datetime
+
+        Returns:
+            {"valid": bool, "error": str, "parsed_datetime": datetime} - результат валидации
+        """
+        if not booking_datetime or not isinstance(booking_datetime, str):
+            return {"valid": False, "error": "booking_datetime должен быть непустой строкой"}
+
+        try:
+            # Парсим дату с поддержкой разных форматов
+            booking_dt = datetime.fromisoformat(booking_datetime.replace('Z', '+00:00'))
+
+            # Проверяем что дата в будущем
+            now = datetime.now()
+            if booking_dt <= now:
+                return {"valid": False, "error": f"Дата записи должна быть в будущем. Получена: {booking_dt}, сейчас: {now}"}
+
+            # Проверяем что дата не слишком далеко в будущем (например, не больше года)
+            max_future = now + timedelta(days=365)
+            if booking_dt > max_future:
+                return {"valid": False, "error": f"Дата записи слишком далеко в будущем: {booking_dt}"}
+
+            return {"valid": True, "error": None, "parsed_datetime": booking_dt}
+
+        except ValueError as e:
+            return {"valid": False, "error": f"Некорректный формат даты '{booking_datetime}': {str(e)}"}
+
+    def _validate_contact_info(self, phone: str, fullname: str, email: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Валидация контактной информации
+
+        Returns:
+            {"valid": bool, "error": str} - результат валидации
+        """
+        if not phone or not isinstance(phone, str) or len(phone.strip()) == 0:
+            return {"valid": False, "error": "Телефон не может быть пустым"}
+
+        if not fullname or not isinstance(fullname, str) or len(fullname.strip()) == 0:
+            return {"valid": False, "error": "Имя клиента не может быть пустым"}
+
+        # Базовая проверка формата телефона
+        phone_clean = phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
+        if not phone_clean.isdigit() or len(phone_clean) < 10:
+            return {"valid": False, "error": f"Некорректный формат телефона: {phone}"}
+
+        # Проверка email если указан
+        if email and email.strip():
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email.strip()):
+                return {"valid": False, "error": f"Некорректный формат email: {email}"}
+
+        return {"valid": True, "error": None}
+
+    async def _check_slot_availability(self, staff_id: int, service_ids: List[int], booking_dt: datetime) -> Dict[str, Any]:
+        """
+        Проверка доступности временного слота (опциональная проверка)
+
+        Returns:
+            {"available": bool, "error": str, "suggestion": str} - результат проверки
+        """
+        try:
+            logger.info(f"YTH_CSA: Проверка доступности слота {booking_dt} для мастера {staff_id}...")
+
+            # Проверяем доступность только для первой услуги (для простоты)
+            primary_service_id = service_ids[0]
+
+            # Получаем доступные времена на эту дату
+            day_str = booking_dt.strftime('%Y-%m-%d')
+            available_times = await self.yclients.get_available_times(
+                staff_id=staff_id,
+                service_id=primary_service_id,
+                day=day_str
+            )
+
+            if not available_times.get('data'):
+                return {
+                    "available": False,
+                    "error": f"Нет доступных слотов на {day_str}",
+                    "suggestion": "Попробуйте выбрать другую дату"
+                }
+
+            # Проверяем есть ли точное время в доступных слотах
+            requested_time = booking_dt.strftime('%H:%M')
+            available_time_slots = [slot.get('time') for slot in available_times['data']]
+
+            if requested_time not in available_time_slots:
+                logger.warning(f"YTH_CSA: Время {requested_time} недоступно. Доступные: {available_time_slots[:5]}")
+                return {
+                    "available": False,
+                    "error": f"Время {requested_time} недоступно",
+                    "suggestion": f"Доступные времена: {', '.join(available_time_slots[:5])}"
+                }
+
+            logger.info(f"YTH_CSA: ✅ Слот {requested_time} доступен")
+            return {"available": True, "error": None, "suggestion": None}
+
+        except Exception as e:
+            logger.warning(f"YTH_CSA: Ошибка проверки доступности слота: {e}")
+            # Не блокируем создание записи из-за ошибки проверки доступности
+            return {
+                "available": True,  # Разрешаем создание записи
+                "error": None,
+                "suggestion": f"Не удалось проверить доступность (создание записи разрешено): {str(e)}"
+            }
+
+    def _create_enhanced_comment(self, original_comment: str, service_ids: List[int], booking_dt: datetime) -> str:
+        """
+        Создание расширенного комментария с полезной информацией
+
+        Returns:
+            Расширенный комментарий для записи
+        """
+        enhanced_parts = []
+
+        # Добавляем оригинальный комментарий если есть
+        if original_comment and original_comment.strip():
+            enhanced_parts.append(f"Комментарий: {original_comment.strip()}")
+
+        # Добавляем техническую информацию
+        enhanced_parts.append(f"Услуги ID: {service_ids}")
+        enhanced_parts.append(f"Создано: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        # Добавляем информацию о времени записи
+        weekday = booking_dt.strftime('%A')
+        time_slot = booking_dt.strftime('%H:%M')
+        enhanced_parts.append(f"День недели: {weekday}, время: {time_slot}")
+
+        return " | ".join(enhanced_parts)
+
     async def handle_create_booking(self, phone: str, fullname: str, service_ids: List[int],
                                   staff_id: int, booking_datetime: str, email: Optional[str] = None,
                                   comment: Optional[str] = None, **kwargs) -> Dict[str, Any]:
-        """Tool handler: создать запись в локальной базе данных"""
-        logger.info(f"YTH_HCB: Обработка tool: create_booking(client='{fullname}', phone='{phone}', "
-                   f"services={service_ids}, staff={staff_id}, datetime='{booking_datetime}')")
-        logger.info(f"YTH_HCB: Параметры вызова: phone='{phone}', fullname='{fullname}', service_ids={service_ids}, "
-                   f"staff_id={staff_id}, booking_datetime='{booking_datetime}', email='{email}', "
-                   f"comment='{comment}', kwargs={kwargs}")
-        logger.info(f"YTH_HCB: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
+        """Tool handler: создать запись в локальной базе данных с полной валидацией"""
+        logger.info(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
+        logger.info(f"YTH_HCB: 🎯 СОЗДАНИЕ ЗАПИСИ - НАЧАЛО")
+        logger.info(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
+        logger.info(f"YTH_HCB: 📋 Входные параметры:")
+        logger.info(f"YTH_HCB:    Клиент: '{fullname}' ({phone})")
+        logger.info(f"YTH_HCB:    Услуги: {service_ids} (тип: {type(service_ids)})")
+        logger.info(f"YTH_HCB:    Мастер: {staff_id} (тип: {type(staff_id)})")
+        logger.info(f"YTH_HCB:    Дата: '{booking_datetime}'")
+        logger.info(f"YTH_HCB:    Email: '{email}'")
+        logger.info(f"YTH_HCB:    Комментарий: '{comment}'")
+        logger.info(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
 
         try:
-            # Парсим дату
-            logger.info("YTH_HCB:  Парсим дату бронирования...")
-            booking_dt = datetime.fromisoformat(booking_datetime.replace('Z', '+00:00'))
-            logger.info(f"YTH_HCB:  Дата бронирования: {booking_dt}")
+            # ============================================================================
+            # 1. ВАЛИДАЦИЯ ВХОДНЫХ ДАННЫХ
+            # ============================================================================
 
-            # Сохраняем запись в локальную базу данных
-            logger.info("YTH_HCB:  Сохраняем запись в локальную базу данных...")
+            logger.info("YTH_HCB: 🔍 Этап 1: Валидация входных данных...")
+
+            # Валидация контактной информации
+            contact_validation = self._validate_contact_info(phone, fullname, email)
+            if not contact_validation["valid"]:
+                logger.error(f"YTH_HCB: ❌ Ошибка валидации контактов: {contact_validation['error']}")
+                return {"error": f"Некорректные контактные данные: {contact_validation['error']}", "success": False}
+            logger.info("YTH_HCB: ✅ Контактные данные валидны")
+
+            # Валидация service_ids
+            service_validation = self._validate_service_ids(service_ids)
+            if not service_validation["valid"]:
+                logger.error(f"YTH_HCB: ❌ Ошибка валидации service_ids: {service_validation['error']}")
+                return {"error": f"Некорректные ID услуг: {service_validation['error']}", "success": False}
+            logger.info(f"YTH_HCB: ✅ service_ids валидны: {service_ids}")
+
+            # Валидация staff_id
+            staff_validation = self._validate_staff_id(staff_id)
+            if not staff_validation["valid"]:
+                logger.error(f"YTH_HCB: ❌ Ошибка валидации staff_id: {staff_validation['error']}")
+                return {"error": f"Некорректный ID мастера: {staff_validation['error']}", "success": False}
+            logger.info(f"YTH_HCB: ✅ staff_id валиден: {staff_id}")
+
+            # Валидация даты
+            datetime_validation = self._validate_booking_datetime(booking_datetime)
+            if not datetime_validation["valid"]:
+                logger.error(f"YTH_HCB: ❌ Ошибка валидации даты: {datetime_validation['error']}")
+                return {"error": f"Некорректная дата записи: {datetime_validation['error']}", "success": False}
+            booking_dt = datetime_validation["parsed_datetime"]
+            logger.info(f"YTH_HCB: ✅ Дата валидна: {booking_dt}")
+
+            # ============================================================================
+            # 2. ПРОВЕРКА СУЩЕСТВОВАНИЯ УСЛУГ И МАСТЕРА В API
+            # ============================================================================
+
+            logger.info("YTH_HCB: 🌐 Этап 2: Проверка существования услуг и мастера в API...")
+
+            # Получаем и проверяем услуги
+            try:
+                services_data = await self._get_services_from_api()
+                if not services_data:
+                    logger.error("YTH_HCB: ❌ API вернул пустой список услуг")
+                    return {"error": "Не удалось получить список услуг из системы", "success": False}
+
+                logger.info(f"YTH_HCB: 📋 Получено {len(services_data)} услуг из API")
+
+                # Проверяем что все запрашиваемые услуги существуют
+                available_service_ids = {s.get('id') for s in services_data if s.get('id')}
+                missing_services = [sid for sid in service_ids if sid not in available_service_ids]
+
+                if missing_services:
+                    logger.error(f"YTH_HCB: ❌ Услуги не найдены в системе: {missing_services}")
+                    logger.error(f"YTH_HCB: 📋 Доступные ID услуг (первые 10): {list(available_service_ids)[:10]}")
+                    return {
+                        "error": f"Услуги с ID {missing_services} не найдены в системе",
+                        "success": False,
+                        "available_services": list(available_service_ids)[:20]  # Для отладки
+                    }
+
+                logger.info(f"YTH_HCB: ✅ Все услуги найдены в системе: {service_ids}")
+
+            except Exception as e:
+                logger.error(f"YTH_HCB: ❌ Ошибка получения услуг из API: {e}")
+                return {"error": f"Ошибка связи с системой услуг: {str(e)}", "success": False}
+
+            # Получаем и проверяем мастеров
+            try:
+                if not self.yclients:
+                    logger.error("YTH_HCB: ❌ YClients клиент недоступен")
+                    return {"error": "Система недоступна", "success": False}
+
+                staff_list = await self.yclients.get_staff(force_refresh=True, use_real_api=True)
+                available_staff_ids = {staff.id if hasattr(staff, 'id') else staff.get('id') for staff in staff_list}
+
+                if staff_id not in available_staff_ids:
+                    logger.error(f"YTH_HCB: ❌ Мастер с ID {staff_id} не найден")
+                    logger.error(f"YTH_HCB: 👥 Доступные мастера: {list(available_staff_ids)}")
+                    return {
+                        "error": f"Мастер с ID {staff_id} не найден в системе",
+                        "success": False,
+                        "available_staff": list(available_staff_ids)  # Для отладки
+                    }
+
+                logger.info(f"YTH_HCB: ✅ Мастер найден в системе: {staff_id}")
+
+            except Exception as e:
+                logger.error(f"YTH_HCB: ❌ Ошибка получения мастеров из API: {e}")
+                return {"error": f"Ошибка связи с системой мастеров: {str(e)}", "success": False}
+
+            # ============================================================================
+            # 2.5. ОПЦИОНАЛЬНАЯ ПРОВЕРКА ДОСТУПНОСТИ СЛОТА
+            # ============================================================================
+
+            logger.info("YTH_HCB: ⏰ Этап 2.5: Проверка доступности временного слота...")
+
+            slot_check = await self._check_slot_availability(staff_id, service_ids, booking_dt)
+            if not slot_check["available"]:
+                logger.warning(f"YTH_HCB: ⚠️ Слот может быть недоступен: {slot_check['error']}")
+                # Не блокируем создание записи, но предупреждаем
+                return {
+                    "error": slot_check["error"],
+                    "success": False,
+                    "suggestion": slot_check["suggestion"],
+                    "warning": "Выбранное время может быть недоступно"
+                }
+            elif slot_check["suggestion"]:
+                logger.info(f"YTH_HCB: ℹ️ Информация о слоте: {slot_check['suggestion']}")
+
+            # ============================================================================
+            # 3. СОХРАНЕНИЕ В БАЗУ ДАННЫХ
+            # ============================================================================
+
+            logger.info("YTH_HCB: 💾 Этап 3: Сохранение в базу данных...")
 
             with SessionLocal() as db:
-                # Проверяем/создаем клиента
+                # ============================================================================
+                # 3.1 УПРАВЛЕНИЕ КЛИЕНТАМИ
+                # ============================================================================
+
+                logger.info("YTH_HCB: 👤 Этап 3.1: Поиск/создание клиента...")
                 client = None
 
                 # Сначала пытаемся найти клиента по telegram_id
                 if self.telegram_id:
                     client = db.query(Client).filter(Client.telegram_id == str(self.telegram_id)).first()
+                    if client:
+                        logger.info(f"YTH_HCB: ✅ Найден клиент по Telegram ID: {client.id}")
 
                 # Если не нашли по telegram_id, ищем по телефону
                 if not client and phone:
-                    # Нормализуем телефон для поиска
                     normalized_phone = phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
                     client = db.query(Client).filter(Client.phone.contains(normalized_phone[-10:])).first()
+                    if client:
+                        logger.info(f"YTH_HCB: ✅ Найден клиент по телефону: {client.id}")
 
                 # Если клиент не найден, создаем нового
                 if not client:
@@ -1185,7 +1153,7 @@ class YclientsToolsHandler:
                     db.add(client)
                     db.commit()
                     db.refresh(client)
-                    logger.info(f"YTH_HCB:  Создан новый клиент ID: {client.id} для {fullname} ({phone})")
+                    logger.info(f"YTH_HCB: ✅ Создан новый клиент ID: {client.id} для {fullname} ({phone})")
                 else:
                     # Обновляем данные клиента если нужно
                     updated = False
@@ -1198,75 +1166,100 @@ class YclientsToolsHandler:
                         updated = True
                     if updated:
                         db.commit()
-                    logger.info(f"YTH_HCB:  Используем существующего клиента ID: {client.id}")
+                        logger.info("YTH_HCB: ✅ Данные клиента обновлены")
 
-                # Получаем названия услуг из service_ids (для отображения)
+                # ============================================================================
+                # 3.2 ПОЛУЧЕНИЕ ЧИТАЕМЫХ НАЗВАНИЙ
+                # ============================================================================
+
+                logger.info("YTH_HCB: 🏷️ Этап 3.2: Получение читаемых названий...")
+
+                # Получаем названия услуг (уже получили services_data выше)
+                services_dict = {s.get('id'): s.get('title', f'Услуга #{s.get("id")}') for s in services_data}
                 service_names = []
-                if service_ids:
-                    # Получаем реальные названия услуг
-                    services_data = await self._get_services_from_api()
-                    services_dict = {s.get('id'): s.get('title', f'Услуга #{s.get("id")}') for s in services_data}
 
-                    for service_id in service_ids:
-                        service_name = services_dict.get(service_id, f"Услуга #{service_id}")
-                        service_names.append(service_name)
-                        logger.info(f"YTH_HCB:  Услуга ID {service_id} -> '{service_name}'")
+                for service_id in service_ids:
+                    service_name = services_dict.get(service_id, f"Услуга #{service_id}")
+                    service_names.append(service_name)
+                    logger.info(f"YTH_HCB:    Услуга ID {service_id} -> '{service_name}'")
 
-                # Получаем реальное имя мастера из staff_id
+                # Получаем имя мастера (уже получили staff_list выше)
                 staff_name = f"Мастер #{staff_id}"
-                try:
-                    # Пытаемся получить реальное имя мастера из YClients API
-                    staff_data = await self.yclients.get_staff()
-                    if staff_data and 'data' in staff_data:
-                        for staff_member in staff_data['data']:
-                            if staff_member.get('id') == staff_id:
-                                staff_name = staff_member.get('name', f"Мастер #{staff_id}")
-                                logger.info(f"YTH_HCB:  Мастер ID {staff_id} -> '{staff_name}'")
-                                break
-                except Exception as e:
-                    logger.warning(f"YTH_HCB:  Не удалось получить имя мастера ID {staff_id}: {e}")
-                    # Оставляем заглушку
+                for staff in staff_list:
+                    staff_id_check = staff.id if hasattr(staff, 'id') else staff.get('id')
+                    if staff_id_check == staff_id:
+                        staff_name = staff.name if hasattr(staff, 'name') else staff.get('name', f"Мастер #{staff_id}")
+                        logger.info(f"YTH_HCB:    Мастер ID {staff_id} -> '{staff_name}'")
+                        break
 
-                # Создаем запись о встрече
-                # Теперь client всегда должен существовать
+                # ============================================================================
+                # 3.3 СОЗДАНИЕ ЗАПИСИ
+                # ============================================================================
+
+                logger.info("YTH_HCB: 📝 Этап 3.3: Создание записи в БД...")
+
                 if not client or not client.id:
                     raise ValueError("Не удалось создать или найти клиента")
 
+                # Создаем расширенный комментарий
+                enhanced_comment = self._create_enhanced_comment(comment, service_ids, booking_dt)
+
                 appointment = Appointment(
-                    client_id=client.id,  # Теперь client_id всегда будет заполнен
-                    service_ids=json.dumps(service_ids) if service_ids else None,  # Сохраняем ID услуг как JSON
+                    client_id=client.id,
+                    service_ids=json.dumps(service_ids),  # Сохраняем ID услуг как JSON
                     staff_id=staff_id,  # Сохраняем ID мастера
-                    service_name=", ".join(service_names) if service_names else "Услуга",
+                    service_name=", ".join(service_names),
                     master_name=staff_name,
                     appointment_datetime=booking_dt,
-                    duration_minutes=60,  # Стандартная длительность
+                    duration_minutes=60,  # TODO: Вычислять из длительности услуг
                     status="scheduled"
                 )
                 db.add(appointment)
                 db.commit()
                 db.refresh(appointment)
 
-                logger.info(f"YTH_HCB:  Запись успешно создана в локальной БД с ID: {appointment.id}")
+                # ============================================================================
+                # 4. ФОРМИРОВАНИЕ УСПЕШНОГО ОТВЕТА
+                # ============================================================================
+
+                logger.info("YTH_HCB: ✅ Этап 4: Формирование ответа...")
 
                 result = {
                     "success": True,
                     "record_id": appointment.id,
                     "client_name": fullname,
                     "phone": phone,
+                    "email": email,
                     "services": service_names,
+                    "service_ids": service_ids,  # Для внутреннего использования
                     "master": staff_name,
+                    "staff_id": staff_id,  # Для внутреннего использования
                     "datetime": booking_dt.isoformat(),
                     "status": "scheduled",
-                    "message": "Запись успешно создана в системе"
+                    "message": "Запись успешно создана в системе",
+                    "comment": comment
                 }
 
-                logger.info(f"YTH_HCB:  Детали записи: {result}")
+                logger.info(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
+                logger.info(f"YTH_HCB: 🎉 СОЗДАНИЕ ЗАПИСИ - УСПЕХ!")
+                logger.info(f"YTH_HCB:    ID записи: {appointment.id}")
+                logger.info(f"YTH_HCB:    Клиент: {fullname} (ID: {client.id})")
+                logger.info(f"YTH_HCB:    Услуги: {service_names}")
+                logger.info(f"YTH_HCB:    Мастер: {staff_name}")
+                logger.info(f"YTH_HCB:    Дата: {booking_dt}")
+                logger.info(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
+
                 return {"booking": result, "success": True}
 
         except Exception as e:
-            logger.error(f"YTH_HCB:  Ошибка в tool create_booking: {e}")
-            logger.error(f"YTH_HCB:  Тип ошибки: {type(e).__name__}")
-            return {"error": str(e), "success": False}
+            logger.error(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
+            logger.error(f"YTH_HCB: ❌ СОЗДАНИЕ ЗАПИСИ - ОШИБКА!")
+            logger.error(f"YTH_HCB:    Тип ошибки: {type(e).__name__}")
+            logger.error(f"YTH_HCB:    Сообщение: {str(e)}")
+            logger.error(f"YTH_HCB: ═══════════════════════════════════════════════════════════")
+            import traceback
+            logger.error(f"YTH_HCB: Полный стек ошибки:\n{traceback.format_exc()}")
+            return {"error": f"Внутренняя ошибка при создании записи: {str(e)}", "success": False}
 
     async def handle_get_available_days(self, staff_id: int, service_id: int, **kwargs) -> Dict[str, Any]:
         """Tool handler: получить доступные дни для записи к сотруднику"""
