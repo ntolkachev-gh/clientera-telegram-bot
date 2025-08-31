@@ -27,7 +27,8 @@ class YclientsToolsDefinition:
         """
         logger.info("YTD_GTS: Формирование схем tools для OpenAI Function Calling")
         logger.info("YTD_GTS: Создаем схемы для следующих tools:")
-        logger.info("YTD_GTS:   get_services - получение списка услуг из Youclients API")
+        logger.info("YTD_GTS:   get_services - получение списка услуг для клиента (без ID)")
+        logger.info("YTD_GTS:   get_services_with_id - получение списка услуг с ID для записи")
         logger.info("YTD_GTS:   get_staff - получение списка мастеров")
         logger.info("YTD_GTS:   find_service_by_name - поиск услуги по названию")
         logger.info("YTD_GTS:   find_staff_by_name - поиск мастера по имени")
@@ -38,6 +39,7 @@ class YclientsToolsDefinition:
 
         tools = [
             YclientsToolsDefinition._get_services_tool(),
+            YclientsToolsDefinition._get_services_with_id_tool(),
             YclientsToolsDefinition._get_staff_tool(),
             YclientsToolsDefinition._find_service_by_name_tool(),
             YclientsToolsDefinition._find_staff_by_name_tool(),
@@ -54,12 +56,28 @@ class YclientsToolsDefinition:
 
     @staticmethod
     def _get_services_tool() -> Dict[str, Any]:
-        """Схема tool для получения списка услуг"""
+        """Схема tool для получения списка услуг (только название и длительность)"""
         return {
             "type": "function",
             "function": {
                 "name": "get_services",
-                "description": "Получить актуальный список доступных услуг салона красоты с ценами и длительностью из Youclients API",
+                "description": "Получить список доступных услуг салона для показа клиенту (только название, цена и длительность, без ID). Используй этот tool когда нужно показать клиенту какие услуги доступны.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        }
+
+    @staticmethod
+    def _get_services_with_id_tool() -> Dict[str, Any]:
+        """Схема tool для получения списка услуг с ID для создания записи"""
+        return {
+            "type": "function",
+            "function": {
+                "name": "get_services_with_id",
+                "description": "Получить список доступных услуг салона с ID для создания записи. Используй этот tool только когда нужно получить ID услуг для создания записи через create_booking.",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -293,6 +311,7 @@ class YclientsToolsHandler:
         logger.info("YTH_GTF: Получение маппинга функций для tools")
         tool_functions = {
             "get_services": self.handle_get_services,
+            "get_services_with_id": self.handle_get_services_with_id,
             "get_staff": self.handle_get_staff,
             "find_service_by_name": self.handle_find_service_by_name,
             "find_staff_by_name": self.handle_find_staff_by_name,
@@ -310,34 +329,66 @@ class YclientsToolsHandler:
     # ============================================================================
 
     async def handle_get_services(self, **kwargs) -> Dict[str, Any]:
-        """Tool handler: получить полный список услуг из Youclients Proxy API"""
-        logger.info("YTH_HGS: Обработка tool: get_services")
+        """Tool handler: получить список услуг для показа клиенту (без ID)"""
+        logger.info("YTH_HGS: Обработка tool: get_services (без ID)")
         logger.info(f"YTH_HGS: Параметры вызова: {kwargs}")
-        logger.info(f"YTH_HGS: Полные параметры kwargs: {json.dumps(kwargs, ensure_ascii=False, indent=2) if kwargs else 'None'}")
 
         try:
-            logger.info("YTH_HGS: Получение всех услуг из Youclients Proxy API...")
+            logger.info("YTH_HGS: Получение услуг для показа клиенту...")
 
             # Получаем услуги из API
-            services = await self._get_services_from_api()
+            services_full = await self._get_services_from_api()
 
-            logger.info(f"YTH_HGS: Найдено {len(services)} услуг в API")
-            logger.info(f"YTH_HGS: Успешно обработано {len(services)} услуг")
+            # Убираем ID из данных для клиента
+            services_for_client = []
+            for service in services_full:
+                client_service = {
+                    "title": service.get("title"),
+                    "price": service.get("price"),
+                    "price_display": service.get("price_display"),
+                    "duration": service.get("duration"),
+                    "category": service.get("category"),
+                    "specialist": service.get("specialist"),
+                    "description": service.get("description")
+                }
+                services_for_client.append(client_service)
 
-            if services:
-                logger.info(f"YTH_HGS: Первые 3 услуги: {services[:3]}")
-                logger.info(f"YTH_HGS: Полный список названий услуг: {[s.get('title', 'Unknown') for s in services]}")
+            logger.info(f"YTH_HGS: Найдено {len(services_for_client)} услуг для показа клиенту")
 
             return {
-                "services": services,
-                "total_count": len(services),
+                "services": services_for_client,
+                "total_count": len(services_for_client),
                 "success": True
             }
 
         except Exception as e:
             logger.error(f"YTH_HGS: Ошибка в tool get_services: {e}")
-            logger.error(f"YTH_HGS: Тип ошибки: {type(e).__name__}")
-            logger.error(f"YTH_HGS: Полная информация об ошибке: {str(e)}", exc_info=True)
+            return {"error": str(e), "success": False}
+
+    async def handle_get_services_with_id(self, **kwargs) -> Dict[str, Any]:
+        """Tool handler: получить список услуг с ID для создания записи"""
+        logger.info("YTH_HGSWI: Обработка tool: get_services_with_id (с ID)")
+        logger.info(f"YTH_HGSWI: Параметры вызова: {kwargs}")
+
+        try:
+            logger.info("YTH_HGSWI: Получение услуг с ID для создания записи...")
+
+            # Получаем полные данные услуг из API (с ID)
+            services_with_id = await self._get_services_from_api()
+
+            logger.info(f"YTH_HGSWI: Найдено {len(services_with_id)} услуг с ID")
+
+            if services_with_id:
+                logger.info(f"YTH_HGSWI: Первые 3 услуги с ID: {services_with_id[:3]}")
+
+            return {
+                "services": services_with_id,
+                "total_count": len(services_with_id),
+                "success": True
+            }
+
+        except Exception as e:
+            logger.error(f"YTH_HGSWI: Ошибка в tool get_services_with_id: {e}")
             return {"error": str(e), "success": False}
 
     async def _get_services_from_api(self) -> List[Dict[str, Any]]:

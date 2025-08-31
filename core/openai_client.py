@@ -176,6 +176,10 @@ class OpenAIClient:
             model = settings.openai_default_model
 
         logger.info(f"OAI_CC: 🤖 Отправка запроса в OpenAI - Модель: {model}, Клиент: {client_id}")
+
+        # Логируем полный запрос
+        self._log_openai_request(messages, model, [], 0)
+
         try:
             # Параметры для разных моделей
             if model.startswith("gpt-5"):
@@ -194,6 +198,9 @@ class OpenAIClient:
                     temperature=0.7,
                     timeout=OPENAI_TIMEOUTS["request_timeout"]
                 )
+
+            # Логируем полный ответ
+            self._log_openai_response(response, 0)
 
             # Логирование использования
             usage = response.usage
@@ -483,6 +490,9 @@ class OpenAIClient:
             current_messages = messages.copy()
 
             while tool_calls_count < max_tool_calls:
+                # Логируем полный запрос к OpenAI
+                self._log_openai_request(current_messages, model, self.available_tools, tool_calls_count)
+
                 # Отправляем запрос с tools
                 if model.startswith("gpt-5"):
                     response = self.client.chat.completions.create(
@@ -502,6 +512,9 @@ class OpenAIClient:
                         temperature=0.7,
                         timeout=OPENAI_TIMEOUTS["request_timeout"]
                     )
+
+                # Логируем полный ответ от OpenAI
+                self._log_openai_response(response, tool_calls_count)
 
                 # Логирование использования
                 usage = response.usage
@@ -537,13 +550,12 @@ class OpenAIClient:
                 if not message.tool_calls:
                     logger.info(f" Получен финальный ответ от OpenAI: {message.content[:100]}...")
 
-                    # Проверяем на ID услуг в ответе
                     response_content = message.content or "Извините, не удалось получить ответ."
+
+                    # Логируем если ответ содержит ID услуг (для мониторинга)
                     if self._contains_service_ids(response_content):
-                        logger.error("⚠️ КРИТИЧЕСКАЯ ОШИБКА: Ответ содержит ID услуг!")
-                        logger.error(f"Проблемный ответ: {response_content[:200]}...")
-                        # Возвращаем безопасный ответ
-                        return "У нас широкий спектр услуг по направлениям: ногти, брови и ресницы, уход за лицом, волосы, эпиляция, инъекции. Какое направление вас интересует больше всего?"
+                        logger.warning("⚠️ ВНИМАНИЕ: Ответ содержит ID услуг - это может быть нежелательно для клиента")
+                        logger.warning(f"Ответ с ID: {response_content[:200]}...")
 
                     return response_content
 
@@ -643,3 +655,100 @@ class OpenAIClient:
             return True
 
         return False
+
+    def _log_openai_request(self, messages: List[Dict[str, str]], model: str, tools: List[Dict], iteration: int):
+        """
+        Логирует полный запрос к OpenAI API
+
+        Args:
+            messages: Сообщения для отправки
+            model: Используемая модель
+            tools: Доступные tools
+            iteration: Номер итерации
+        """
+        import json
+
+        logger.info("=" * 80)
+        logger.info(f"📤 OPENAI REQUEST - Iteration {iteration + 1}")
+        logger.info("=" * 80)
+        logger.info(f"🤖 Model: {model}")
+        logger.info(f"🔧 Tools count: {len(tools)}")
+        logger.info(f"💬 Messages count: {len(messages)}")
+
+        # Логируем все сообщения
+        for i, message in enumerate(messages):
+            logger.info(f"📝 Message {i + 1} ({message.get('role', 'unknown')}):")
+            content = message.get('content', '')
+            if len(content) > 1000:
+                logger.info(f"   Content (first 1000 chars): {content[:1000]}...")
+                logger.info(f"   Content (last 200 chars): ...{content[-200:]}")
+            else:
+                logger.info(f"   Content: {content}")
+
+            # Логируем tool_calls если есть
+            if 'tool_calls' in message:
+                logger.info(f"   Tool calls: {len(message['tool_calls'])}")
+                for j, tool_call in enumerate(message['tool_calls']):
+                    logger.info(f"     Tool {j + 1}: {tool_call.get('function', {}).get('name', 'unknown')}")
+                    args = tool_call.get('function', {}).get('arguments', '')
+                    logger.info(f"     Args: {args}")
+
+        # Логируем доступные tools
+        if tools:
+            logger.info("🛠️  Available tools:")
+            for i, tool in enumerate(tools):
+                tool_name = tool.get('function', {}).get('name', 'unknown')
+                logger.info(f"   {i + 1}. {tool_name}")
+
+        logger.info("=" * 80)
+
+    def _log_openai_response(self, response, iteration: int):
+        """
+        Логирует полный ответ от OpenAI API
+
+        Args:
+            response: Ответ от OpenAI
+            iteration: Номер итерации
+        """
+        logger.info("=" * 80)
+        logger.info(f"📥 OPENAI RESPONSE - Iteration {iteration + 1}")
+        logger.info("=" * 80)
+
+        if hasattr(response, 'choices') and response.choices:
+            message = response.choices[0].message
+            logger.info(f"🎯 Response role: {getattr(message, 'role', 'unknown')}")
+
+            # Логируем содержимое ответа
+            content = getattr(message, 'content', '')
+            if content:
+                if len(content) > 1000:
+                    logger.info(f"📝 Content (first 1000 chars): {content[:1000]}...")
+                    logger.info(f"📝 Content (last 200 chars): ...{content[-200:]}")
+                else:
+                    logger.info(f"📝 Content: {content}")
+            else:
+                logger.info("📝 Content: [None]")
+
+            # Логируем tool calls если есть
+            tool_calls = getattr(message, 'tool_calls', [])
+            if tool_calls:
+                logger.info(f"🔧 Tool calls: {len(tool_calls)}")
+                for i, tool_call in enumerate(tool_calls):
+                    function = getattr(tool_call, 'function', None)
+                    if function:
+                        logger.info(f"   Tool {i + 1}:")
+                        logger.info(f"     ID: {getattr(tool_call, 'id', 'unknown')}")
+                        logger.info(f"     Function: {getattr(function, 'name', 'unknown')}")
+                        logger.info(f"     Arguments: {getattr(function, 'arguments', 'unknown')}")
+            else:
+                logger.info("🔧 Tool calls: [None]")
+
+        # Логируем usage информацию
+        if hasattr(response, 'usage'):
+            usage = response.usage
+            logger.info(f"💰 Usage:")
+            logger.info(f"   Prompt tokens: {getattr(usage, 'prompt_tokens', 'unknown')}")
+            logger.info(f"   Completion tokens: {getattr(usage, 'completion_tokens', 'unknown')}")
+            logger.info(f"   Total tokens: {getattr(usage, 'total_tokens', 'unknown')}")
+
+        logger.info("=" * 80)
